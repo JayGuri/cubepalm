@@ -163,7 +163,7 @@ test("two scrambles in a row are different", async ({ page }) => {
   test.setTimeout(120_000)
   await page.goto("/play/cube3")
   await expect(page.getByTestId("app")).toHaveAttribute("data-solver-ready", "true", { timeout: 45_000 })
-  const recent = async () => JSON.parse((await page.evaluate(() => localStorage.getItem("palmtwist.recentScrambles.v1"))) ?? "[]") as string[]
+  const recent = async () => JSON.parse((await page.evaluate(() => localStorage.getItem("cubepalm.recentScrambles.v1"))) ?? "[]") as string[]
   for (let i = 0; i < 2; i++) {
     await page.getByRole("button", { name: /scramble/i }).click()
     await expect(page.getByTestId("guide-me")).toBeEnabled({ timeout: 40_000 })

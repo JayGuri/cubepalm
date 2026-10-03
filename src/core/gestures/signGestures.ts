@@ -4,7 +4,7 @@ import { distance, handScale } from './landmarkMath'
 import type { Handedness, HandFrame, Landmark, LandmarkFrame } from './landmarks'
 import type { Axis } from './MouseDragAdapter'
 
-// "Signs": Palmtwist's two-handed control scheme.
+// "Signs": CubePalm's two-handed control scheme.
 //
 //   The POSE picks the layer.   The HAND picks the direction.
 //   Right hand = clockwise.     Left hand = counter-clockwise (prime).

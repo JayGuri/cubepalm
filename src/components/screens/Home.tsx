@@ -190,7 +190,7 @@ export function Home() {
               Built from scratch.
             </h2>
             <p className="mt-4 max-w-sm text-[#B2B0B9]">
-              Palmtwist has no server. The tracking, the solver and the 3D all run in your browser.
+              CubePalm has no server. The tracking, the solver and the 3D all run in your browser.
             </p>
             <div className="mt-6 flex flex-wrap gap-x-6 gap-y-2 text-sm">
               <a href={`${GITHUB}/blob/main/docs/MATH.md`} target="_blank" rel="noreferrer" className="text-[#4CC9F0] underline-offset-4 hover:underline">

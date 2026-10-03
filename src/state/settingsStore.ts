@@ -13,7 +13,7 @@ export interface SettingsState {
   setSwapHands: (on: boolean) => void
 }
 
-const STORAGE_KEY = 'palmtwist.settings.v1'
+const STORAGE_KEY = 'cubepalm.settings.v1'
 
 interface StoredSettings {
   colorblindPalette: boolean

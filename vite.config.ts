@@ -12,8 +12,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       injectRegister: false,
       manifest: {
-        name: 'Palmtwist',
-        short_name: 'Palmtwist',
+        name: 'CubePalm',
+        short_name: 'CubePalm',
         description: "A Rubik's Cube you control with your hands. Everything runs in your browser.",
         theme_color: '#16171B',
         background_color: '#16171B',
@@ -45,7 +45,7 @@ export default defineConfig({
             urlPattern: /\/(mediapipe|models)\//,
             handler: 'CacheFirst',
             options: {
-              cacheName: 'handcube-gesture-assets',
+              cacheName: 'cubepalm-gesture-assets',
               expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 365 },
             },
           },

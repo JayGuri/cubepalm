@@ -2,7 +2,7 @@ import { create } from 'zustand'
 
 // Which Academy lessons this learner has finished, remembered on this device.
 
-const STORAGE_KEY = 'palmtwist.academy.v1'
+const STORAGE_KEY = 'cubepalm.academy.v1'
 
 function load(): string[] {
   try {

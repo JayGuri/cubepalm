@@ -1,4 +1,4 @@
-// Kociemba's two-phase algorithm, written from scratch for Palmtwist, plus an
+// Kociemba's two-phase algorithm, written from scratch for CubePalm, plus an
 // optimal-solution prover and a random-state scrambler.
 //
 // THE IDEA. A cube has 43 quintillion states, far too many to search. Kociemba

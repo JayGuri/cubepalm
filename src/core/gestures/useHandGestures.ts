@@ -137,10 +137,10 @@ export function useHandGestures(options: UseHandGesturesOptions): UseHandGesture
   })
   useEffect(() => {
     if (!import.meta.env.DEV || !enabled) return
-    const w = window as unknown as { __palmtwistInjectFrame?: (f: LandmarkFrame) => void }
-    w.__palmtwistInjectFrame = (f) => processFrameRef.current(f)
+    const w = window as unknown as { __cubepalmInjectFrame?: (f: LandmarkFrame) => void }
+    w.__cubepalmInjectFrame = (f) => processFrameRef.current(f)
     return () => {
-      delete w.__palmtwistInjectFrame
+      delete w.__cubepalmInjectFrame
     }
   }, [enabled])
 

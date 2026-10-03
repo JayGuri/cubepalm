@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="public/favicon.svg" alt="Palmtwist logo" width="88" />
+<img src="public/favicon.svg" alt="CubePalm logo" width="88" />
 
-# Palmtwist
+# CubePalm
 
 **Solve a Rubik's Cube with your hands.**
 
@@ -17,19 +17,19 @@ Everything runs in your browser, so your camera feed never leaves your device.
 ![MediaPipe](https://img.shields.io/badge/MediaPipe-0097a7)
 ![Vite](https://img.shields.io/badge/Vite-646cff?logo=vite&logoColor=white)
 
-<img src="docs/screenshots/home.png" alt="Palmtwist home page: a cube that scrambles and solves itself" width="860" />
+<img src="docs/screenshots/home.png" alt="CubePalm home page: a cube that scrambles and solves itself" width="860" />
 
 </div>
 
-## Why "Palmtwist"
+## Why "CubePalm"
 
-Your palm is the controller; a twist is what you do to a layer of the cube. Palmtwist is a cube you turn with the flat of your hand.
+A cube you hold in the palm of your hand, without holding anything: your open hand, in front of a webcam, is the controller.
 
 ## What is new here
 
-Hand-controlled cube demos usually do one thing: a pinch or a swipe turns a face, on a single 3×3, with a solver library bolted on. Palmtwist goes further.
+Hand-controlled cube demos usually do one thing: a pinch or a swipe turns a face, on a single 3×3, with a solver library bolted on. CubePalm goes further.
 
-| | A typical hand-tracking cube | **Palmtwist** |
+| | A typical hand-tracking cube | **CubePalm** |
 |---|---|---|
 | **Moves by hand** | A few moves, or grab-and-twist | **Every layer turn, including slices**, from a small finger-sign alphabet. The *fingers* pick the layer and the *hand* picks the direction |
 | **Two hands** | One hand does everything | Right hand turns clockwise, left hand turns back, each with its own colour, so you never think about direction |
@@ -72,7 +72,7 @@ An open hand moving orbits the camera, two open hands spreading zoom it, and a c
 
 *In plain words. The long version is in [`docs/MATH.md`](docs/MATH.md).*
 
-- **Reading your hands.** MediaPipe finds 21 points on each hand. Palmtwist checks which fingertips are above their knuckles, takes a quick vote over a few frames so a flicker never counts, and turns a steady sign into a move.
+- **Reading your hands.** MediaPipe finds 21 points on each hand. CubePalm checks which fingertips are above their knuckles, takes a quick vote over a few frames so a flicker never counts, and turns a steady sign into a move.
 - **Keeping track of a cube.** A cube is a list of where each piece is and how it is twisted. Every move is just a rearrangement of that list, so undo, scramble and "is it solved?" are all simple.
 - **Finding a short solution.** The solver splits the problem in two: first get the cube into a much simpler family of positions, then finish from there. It tries many ways of doing both, from six angles side by side, and keeps the cheapest, counting steps the way a person makes them. A random scramble comes out at about 24 steps; no position ever needs more than 26.
 - **Proving it is the shortest.** A second search works through every cheaper possibility in order. If it finds one, that is the shortest route there is; if it rules them all out, the route in hand is proven shortest. That takes a blink near the end of a solve and would take hours on a fully scrambled cube, so the guide says "shortest possible" only when it has the proof.

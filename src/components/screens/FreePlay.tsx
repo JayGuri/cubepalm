@@ -1029,7 +1029,7 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
 // Far longer than any turn takes to draw (220 ms at normal speed).
 const ANIMATION_WATCHDOG_MS = 3000
 
-const TIPS_KEY = 'palmtwist.tips.v1'
+const TIPS_KEY = 'cubepalm.tips.v1'
 
 /** A phone-sized screen, where the cube needs the room more than the tips do. */
 function onPhone(): boolean {
@@ -1095,7 +1095,7 @@ interface BestResult {
   timeMs: number
   moves: number
 }
-const BEST_KEY = 'palmtwist.best.v1'
+const BEST_KEY = 'cubepalm.best.v1'
 
 function loadBest(puzzleId: string): BestResult | null {
   try {

@@ -374,7 +374,7 @@ export function quarterTurns(moves: Move[]): number {
 }
 
 // ---- Scrambles -------------------------------------------------------------
-const RECENT_KEY = 'palmtwist.recentScrambles.v1'
+const RECENT_KEY = 'cubepalm.recentScrambles.v1'
 const RECENT_LIMIT = 200
 
 function recentScrambles(): string[] {

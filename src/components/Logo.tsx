@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 
-// The Palmtwist mark: a 3x3 cube seen corner-on, white on top, green on the
+// The CubePalm mark: a 3x3 cube seen corner-on, white on top, green on the
 // left and red on the right -- the classic colours. It is drawn from one small
 // bit of geometry, so every size (and the favicon) comes out identical.
 
@@ -53,12 +53,12 @@ function LogoMark({ size = 36 }: { size?: number }) {
 
 export function Logo({ to = '/', size = 36, iconOnlyOnPhone = false }: { to?: string; size?: number; iconOnlyOnPhone?: boolean }) {
   return (
-    <Link to={to} className="group inline-flex items-center gap-3" aria-label="Palmtwist, home">
+    <Link to={to} className="group inline-flex items-center gap-3" aria-label="CubePalm, home">
       <span className="transition-transform duration-300 group-hover:-rotate-12 group-hover:scale-110">
         <LogoMark size={size} />
       </span>
       <span className={`font-display font-extrabold lowercase leading-none tracking-tight ${iconOnlyOnPhone ? 'max-[520px]:hidden' : ''}`} style={{ fontSize: size * 0.78 }}>
-        palmtwist
+        cubepalm
       </span>
     </Link>
   )

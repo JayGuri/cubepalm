@@ -1,4 +1,4 @@
-# The math behind Palmtwist
+# The math behind CubePalm
 
 A from-scratch tour of every piece of mathematics this project uses, in the
 order you'd need it to build the app yourself. No background assumed beyond
@@ -366,7 +366,7 @@ phase-1 solutions to shrink the **total**, landing very close to optimal
 
 ### What this app's solver actually does
 
-Palmtwist's solver is written from scratch (`src/core/solvers/twoPhase.ts`). It was
+CubePalm's solver is written from scratch (`src/core/solvers/twoPhase.ts`). It was
 first built on an off-the-shelf package, which stopped at the **first** good
 solution it found: typically 20 to 23 moves on a real scramble, and silly on a
 cube only a few turns from solved (three turns came back as 21).
