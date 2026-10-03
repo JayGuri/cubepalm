@@ -3,8 +3,35 @@ import type { Move } from '../puzzles/PuzzlePlugin'
 import { initSolverCore, newScrambleAlg, Refiner, solveScrambleDetailed, type RefineStep, type SolveOptions } from './kociembaCore'
 import type { SolverRequest, SolverResponse } from './kociemba.worker'
 
-// Main-thread wrapper. The table build happens off the main thread and is
-// warmed at app start, never on the first Solve press.
+// Main-thread wrapper, and the one place that owns the solver's lifecycle: it
+// starts the worker, notices when it dies or stalls, falls back to the main
+// thread, and says which of those is true. The tables are built off the main
+// thread and warmed at app start, never on the first Solve press.
+
+/**
+ *   idle      -- nothing started yet.
+ *   warming   -- the tables are being built.
+ *   ready     -- a worker is answering.
+ *   fallback  -- the worker never came up or died; the main thread is answering
+ *                (slower, and the page pauses while it thinks, but correct).
+ *   failed    -- even the main thread could not build the tables.
+ */
+export type SolverStatus = 'idle' | 'warming' | 'ready' | 'fallback' | 'failed'
+
+let status: SolverStatus = 'idle'
+let statusError: string | null = null
+const statusListeners = new Set<() => void>()
+function setStatus(next: SolverStatus, error: string | null = null): void {
+  status = next
+  statusError = error
+  for (const listener of statusListeners) listener()
+}
+export const getSolverStatus = (): SolverStatus => status
+export const getSolverError = (): string | null => statusError
+export function subscribeSolverStatus(listener: () => void): () => void {
+  statusListeners.add(listener)
+  return () => statusListeners.delete(listener)
+}
 
 let worker: Worker | null = null
 // Set when the worker never came up; everything then runs on the main thread.
@@ -16,6 +43,18 @@ const progressHandlers = new Map<number, (step: RefineStep) => void>()
 
 function supportsWorker(): boolean {
   return typeof Worker !== 'undefined' && typeof import.meta.url === 'string'
+}
+
+/** The worker is gone for good: fail whatever was waiting on it and answer from the main thread from now on. */
+function abandonWorker(reason: string): void {
+  workerDisabled = true
+  worker?.terminate()
+  worker = null
+  progressHandlers.clear()
+  for (const [, entry] of pending) entry.reject(new Error(reason))
+  pending.clear()
+  releaseSolverPool(true)
+  if (status === 'ready') setStatus('fallback', reason)
 }
 
 function getWorker(): Worker | null {
@@ -35,13 +74,7 @@ function getWorker(): Worker | null {
       if (e.data.ok) entry.resolve(e.data)
       else entry.reject(new Error(e.data.error ?? 'solver failed'))
     }
-    worker.onerror = () => {
-      progressHandlers.clear()
-      // Fall back to the main thread rather than leaving Solve permanently dead.
-      for (const [, entry] of pending) entry.reject(new Error('solver worker crashed'))
-      pending.clear()
-      worker = null
-    }
+    worker.onerror = () => abandonWorker('solver worker crashed')
   } catch {
     worker = null
   }
@@ -50,48 +83,78 @@ function getWorker(): Worker | null {
 
 type Request = Extract<SolverRequest, { type: 'init' | 'solve' | 'scramble' }> extends infer R ? (R extends { id: number } ? Omit<R, 'id'> : never) : never
 
-function ask(request: Request): Promise<SolverResponse> {
-  const w = getWorker()
-  if (!w) {
-    // No worker (test runner, or an environment that blocks module workers):
-    // run the same pure core inline. Slower, but correct.
-    if (request.type === 'init') return initSolverCore().then(() => ({ id: 0, ok: true }))
-    if (request.type === 'scramble') return Promise.resolve({ id: 0, ok: true, scramble: newScrambleAlg() })
-    return solveScrambleDetailed(request.scramble, request.options).then((result) => ({ id: 0, ok: true, result }))
+/** The same pure core, on the main thread. Slower, but it cannot go missing. */
+async function answerInline(request: Request): Promise<SolverResponse> {
+  if (request.type === 'init') {
+    await initSolverCore()
+    return { id: 0, ok: true }
   }
-  const id = nextId++
-  return new Promise<SolverResponse>((resolve, reject) => {
-    pending.set(id, { resolve, reject })
-    w.postMessage({ ...request, id } as SolverRequest)
-  })
+  if (request.type === 'scramble') return { id: 0, ok: true, scramble: newScrambleAlg() }
+  return { id: 0, ok: true, result: await solveScrambleDetailed(request.scramble, request.options) }
 }
 
-const WORKER_START_MS = 15_000
+// How long a worker may take beyond the time it was told to think. A worker
+// that is merely slow answers well inside this; one that is gone never does.
+const ANSWER_GRACE_MS = 12_000
 
 /**
- * Builds the solver's tables. Normally a worker does it; if the worker has not
- * answered within 15 seconds (its script failed to load, or the browser blocks
- * workers) it is abandoned and the solver runs on the main thread instead, so
- * solving and scrambling can never hang waiting for it.
+ * One question, one answer, always. The worker is asked first; if it errors,
+ * dies or goes silent, it is abandoned and the main thread answers instead, so
+ * a caller is never left waiting on a promise that cannot settle.
  */
-export async function initSolver(): Promise<void> {
-  if (!getWorker()) {
-    await initSolverCore()
-    return
-  }
+async function ask(request: Request): Promise<SolverResponse> {
+  const w = getWorker()
+  if (!w) return answerInline(request)
+  const id = nextId++
+  const thinking = request.type === 'solve' ? (request.options?.timeMs ?? 1500) + (request.options?.proveMs ?? 600) : 0
   let timer: ReturnType<typeof setTimeout> | undefined
-  const gaveUp = new Promise<boolean>((resolve) => {
-    timer = setTimeout(() => resolve(true), WORKER_START_MS)
-  })
-  const timedOut = await Promise.race([ask({ type: 'init' }).then(() => false), gaveUp])
-  clearTimeout(timer)
-  if (!timedOut) return
-  workerDisabled = true
-  worker?.terminate()
-  worker = null
-  for (const [, entry] of pending) entry.reject(new Error('solver worker did not start'))
-  pending.clear()
-  await initSolverCore()
+  try {
+    return await new Promise<SolverResponse>((resolve, reject) => {
+      pending.set(id, { resolve, reject })
+      timer = setTimeout(() => {
+        if (pending.has(id)) abandonWorker('solver worker stopped answering')
+      }, thinking + ANSWER_GRACE_MS)
+      w.postMessage({ ...request, id } as SolverRequest)
+    })
+  } catch (e) {
+    // The solver itself rejecting the question is a real error; a lost worker is not.
+    if (!workerDisabled) throw e
+    return answerInline(request)
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+let starting: Promise<void> | null = null
+
+/**
+ * Builds the solver's tables, once. Normally a worker does it; if the worker
+ * errors or has not answered within the grace period it is abandoned and the
+ * main thread builds them instead, so solving and scrambling never hang.
+ * Calling it again while it runs, or after it succeeded, is free.
+ */
+export function initSolver(): Promise<void> {
+  if (starting) return starting
+  setStatus('warming')
+  starting = (async () => {
+    try {
+      await ask({ type: 'init' })
+      setStatus(worker && !workerDisabled ? 'ready' : 'fallback', worker ? null : statusError)
+    } catch (e) {
+      setStatus('failed', (e as Error).message)
+      starting = null
+      throw e
+    }
+  })()
+  return starting
+}
+
+/** Try again from scratch, with a fresh worker (after `failed`, or to leave `fallback`). */
+export function retrySolver(): Promise<void> {
+  workerDisabled = false
+  poolDisabled = false
+  starting = null
+  return initSolver()
 }
 
 /** A solution, and whether it is provably the shortest one there is. */
@@ -158,8 +221,12 @@ let pool: Worker[] = []
 let poolDisabled = false
 
 function poolSize(): number {
-  const cores = typeof navigator === 'undefined' ? 2 : (navigator.hardwareConcurrency ?? 2)
-  return Math.min(4, Math.floor(cores / 2))
+  if (typeof navigator === 'undefined') return 1
+  const cores = navigator.hardwareConcurrency ?? 2
+  // A phone is also drawing the cube and maybe tracking hands on a battery:
+  // two helpers at most there, four on a desktop, never more than half the cores.
+  const phone = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches
+  return Math.min(phone ? 2 : 4, Math.floor(cores / 2))
 }
 
 function ensurePool(): Worker[] {
@@ -173,7 +240,8 @@ function ensurePool(): Worker[] {
         if (e.data.progress) POOL_SEARCH.get(e.data.id)?.(index, e.data.progress)
       }
       w.onerror = () => releaseSolverPool(true)
-      w.postMessage({ id: nextId++, type: 'init' } satisfies SolverRequest)
+      // Helpers only run the two-phase search, so they skip the proof tables.
+      w.postMessage({ id: nextId++, type: 'init', proofs: false } satisfies SolverRequest)
       pool.push(w)
     }
   } catch {

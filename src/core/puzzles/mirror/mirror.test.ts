@@ -2,6 +2,7 @@ import { Alg } from 'cubing/alg'
 import { describe, expect, it } from 'vitest'
 import { createPieces, currentSlot } from './pieces'
 import { buildMirrorGeometry, MIRROR_EXTENTS, pieceBox } from './geometry'
+import { isSolved as cube3Solved } from '../cube3/logic'
 import { createMirrorPlugin, mirrorPiecesOf } from '.'
 
 describe('mirror geometry', () => {
@@ -49,4 +50,36 @@ describe('mirror plugin', () => {
       if (!isCentre) expect(p.rotation).toEqual([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
     }
   }, 30000)
+
+  // Shape decides whether the Mirror Cube is solved. The 3x3 colour pattern kept
+  // beside it (for the solver) must never disagree while only faces are turned.
+  it('shape and colour pattern agree after every face-turn sequence', async () => {
+    const plugin = await createMirrorPlugin()
+    const faces = ['R', "R'", 'R2', 'U', "U'", 'U2', 'F', "F'", 'F2', 'L', "L'", 'L2', 'D', "D'", 'D2', 'B', "B'", 'B2']
+    let seed = 12345
+    const next = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff)
+    for (let round = 0; round < 40; round++) {
+      let s = plugin.createInitialState()
+      const done: string[] = []
+      for (let i = 0; i < 12; i++) {
+        const m = faces[next() % faces.length]
+        done.push(m)
+        s = plugin.applyMove(s, move(m))
+        const pattern = (s.raw as { pattern: Parameters<typeof cube3Solved>[0] }).pattern
+        expect(plugin.isSolved(s), done.join(' ')).toBe(cube3Solved(pattern))
+      }
+      // ...and undoing the lot brings the shape back.
+      for (const m of done.reverse()) s = plugin.applyMove(s, { alg: new Alg(m).invert(), snapAngleDeg: 90 })
+      expect(plugin.isSolved(s)).toBe(true)
+    }
+  })
+
+  it('every single turn unsolves it, and its inverse solves it again', async () => {
+    const plugin = await createMirrorPlugin()
+    for (const m of ['R', 'U', 'F', 'L', 'D', 'B', 'M', 'E', 'S']) {
+      const turned = plugin.applyMove(plugin.createInitialState(), move(m))
+      expect(plugin.isSolved(turned), m).toBe(false)
+      expect(plugin.isSolved(plugin.applyMove(turned, move(m + "'"))), m).toBe(true)
+    }
+  })
 })

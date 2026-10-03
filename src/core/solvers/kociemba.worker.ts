@@ -3,7 +3,7 @@ import { initSolverCore, newScrambleAlg, Refiner, solveScrambleDetailed, warmPro
 
 // Thin shim over the pure core: all real logic (and all the tests) live there.
 export type SolverRequest =
-  | { id: number; type: 'init' }
+  | { id: number; type: 'init'; proofs?: boolean }
   | { id: number; type: 'solve'; scramble: string; options?: SolveOptions }
   | { id: number; type: 'scramble' }
   | { id: number; type: 'refine'; scramble: string; bound?: number; slice?: { index: number; count: number } }
@@ -60,7 +60,7 @@ self.onmessage = async (e: MessageEvent<SolverRequest>) => {
       self.postMessage({ id, ok: true } satisfies SolverResponse)
       // The optimal-search tables are only needed later; build them now, while
       // nobody is waiting on the worker.
-      setTimeout(warmProofTables, 0)
+      if (request.proofs !== false) setTimeout(warmProofTables, 0)
       return
     }
     if (request.type === 'cancel') {

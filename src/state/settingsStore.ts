@@ -27,11 +27,21 @@ const DEFAULTS: StoredSettings = {
   swapHands: false,
 }
 
+/** Keeps each stored value only if it is one the app understands; anything else falls back to its default. */
+export function sanitize(stored: unknown): StoredSettings {
+  const s = (stored && typeof stored === 'object' ? stored : {}) as Record<string, unknown>
+  return {
+    colorblindPalette: typeof s.colorblindPalette === 'boolean' ? s.colorblindPalette : DEFAULTS.colorblindPalette,
+    defaultInputMode: s.defaultInputMode === 'mouse' || s.defaultInputMode === 'hands' ? s.defaultInputMode : DEFAULTS.defaultInputMode,
+    swapHands: typeof s.swapHands === 'boolean' ? s.swapHands : DEFAULTS.swapHands,
+  }
+}
+
 function load(): StoredSettings {
   try {
     const raw = typeof localStorage === 'undefined' ? null : localStorage.getItem(STORAGE_KEY)
     if (!raw) return DEFAULTS
-    return { ...DEFAULTS, ...(JSON.parse(raw) as Partial<StoredSettings>) }
+    return sanitize(JSON.parse(raw))
   } catch {
     return DEFAULTS
   }

@@ -1,5 +1,5 @@
 import { Alg } from 'cubing/alg'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { CameraDebugOverlay } from '../CameraDebugOverlay'
 import { GestureConfidenceIndicator } from '../GestureConfidenceIndicator'
@@ -26,7 +26,7 @@ import { createGuide, expandSteps, followMove, type GuideState } from '../../cor
 import { useHandGestures } from '../../core/gestures/useHandGestures'
 import type { Move, PuzzleId } from '../../core/puzzles/PuzzlePlugin'
 import { usePuzzleStore } from '../../state/puzzleStore'
-import { quarterTurns, releaseSolverPool } from '../../core/solvers/kociemba'
+import { getSolverError, getSolverStatus, quarterTurns, releaseSolverPool, retrySolver, subscribeSolverStatus } from '../../core/solvers/kociemba'
 import { useAcademyStore } from '../../state/academyStore'
 import { useSettingsStore } from '../../state/settingsStore'
 
@@ -155,7 +155,12 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
   const moveQueueRef = useRef<Move[]>([])
   const processingRef = useRef(false)
 
+  const animTimerRef = useRef<number | undefined>(undefined)
+
+  // The turn in flight is over, however it ended: the canvas finished drawing
+  // it, the watchdog below gave up on it, or the queue was flushed under it.
   const handleAnimationComplete = () => {
+    window.clearTimeout(animTimerRef.current)
     setAnimatingMove(null)
     const resolve = animResolveRef.current
     animResolveRef.current = null
@@ -167,7 +172,30 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
       animResolveRef.current = resolve
       applyMove(move)
       setAnimatingMove(move)
+      // The store already holds the move; only the drawing is pending. If the
+      // canvas never reports back (no WebGL, a lost context, a hidden tab whose
+      // frames are paused) the queue must still move on rather than hang.
+      animTimerRef.current = window.setTimeout(handleAnimationComplete, document.hidden ? 0 : ANIMATION_WATCHDOG_MS)
     })
+
+  // Drop every turn still waiting, and the one being drawn. Anything that
+  // replaces the cube (Reset, Scramble, a lesson position, leaving the screen)
+  // calls this first, so no turn from before can land on the cube after. The
+  // generation lets an operation that was mid-await see that it was overtaken.
+  const queueGenRef = useRef(0)
+  const flushQueue = () => {
+    queueGenRef.current++
+    moveQueueRef.current = []
+    handleAnimationComplete()
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => () => flushQueue(), [])
+  // The key and sign handlers are created once, so they read busy from a ref.
+  const busyRef = useRef(false)
+  const setBusyBoth = (on: boolean) => {
+    busyRef.current = on
+    setBusy(on)
+  }
 
   // Every caller gets the SAME promise for the drain in progress, so awaiting
   // it really means "until the queue is empty" -- a second caller used to get
@@ -341,7 +369,7 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
     stopGuide()
     setLessonNote(null)
     setLessonDone(false)
-    moveQueueRef.current = []
+    flushQueue()
     reset()
     const c = lesson.cases[i]
     if (c) for (const m of movesFromAlg(new Alg(c.setup))) applyMove(m)
@@ -394,6 +422,17 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
 
   // The helper workers only exist while this screen is open.
   useEffect(() => () => releaseSolverPool(), [])
+
+  const solverStatus = useSyncExternalStore(subscribeSolverStatus, getSolverStatus)
+
+  // A hidden tab has nobody to show a shorter route to: stop searching, and
+  // pick it up again when the tab comes back.
+  useEffect(() => {
+    const onVisibility = () => (document.hidden ? stopRefine() : beginSearch())
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => document.removeEventListener('visibilitychange', onVisibility)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // --- Guided solve ------------------------------------------------------
   // Opt-in via "Guide me"; it shows one quarter turn at a time. A first route
@@ -485,8 +524,12 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
     markAssisted()
     // Wait for any queued turns to land so the solver sees the real position.
     await drainQueue()
+    if (token !== guideTokenRef.current) return // stopped, or the cube was replaced, while turns landed
     const { state: now, moveHistory: history } = usePuzzleStore.getState()
-    if (!now) return
+    if (!now) {
+      stopGuide()
+      return
+    }
     try {
       const first = await p.solve(now, history, 'quick')
       if (token !== guideTokenRef.current) return // superseded by a newer move or stop
@@ -510,6 +553,8 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
   // Every move the USER makes -- sign, key, drag -- comes through here.
   // (Scramble and Solve feed the queue directly: they aren't the user's.)
   const userMove = (move: Move) => {
+    // A scramble is being dealt: a turn now would be buried in the middle of it.
+    if (busyRef.current) return
     if (solveActiveRef.current) closeSolution()
     countMove(move, true)
     void enqueueMoves([move]).then(() => {
@@ -570,20 +615,22 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
     if (!plugin) return
     stopGuide()
     closeSolution()
-    setBusy(true)
+    setBusyBoth(true)
     setQueueError(null)
     try {
-      moveQueueRef.current = []
+      flushQueue()
       reset()
-      const moves = await plugin.scramble()
-      startSession(quarterTurns(moves))
       forgetSearch()
+      const gen = queueGenRef.current
+      const moves = await plugin.scramble()
+      if (gen !== queueGenRef.current) return // the cube was replaced while the scramble was being drawn up
+      startSession(quarterTurns(moves))
       await enqueueMoves(moves)
-      beginSearch()
+      if (gen === queueGenRef.current) beginSearch()
     } catch (e) {
       setQueueError((e as Error).message)
     } finally {
-      setBusy(false)
+      setBusyBoth(false)
     }
     // No guide here on purpose: after a scramble the user solves it
     // themselves by default, and opts in with "Guide me" if they want help.
@@ -593,7 +640,7 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
     stopGuide()
     closeSolution()
     // Drop turns still waiting to animate, or they would land on the reset cube.
-    moveQueueRef.current = []
+    flushQueue()
     reset()
     startSession(null)
     forgetSearch()
@@ -965,11 +1012,22 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
           )}
 
           {(error || queueError) && <p className="px-6 pb-3 text-sm text-[#EF4444]">{error || queueError}</p>}
+          {solverStatus === 'failed' && (
+            <p className="flex flex-wrap items-center gap-3 px-6 pb-3 text-sm text-[#F5B83D]" data-testid="solver-failed">
+              The solver could not start, so Scramble, Guide me and Solve for me are off. You can still turn the cube.
+              <button type="button" className={BUTTON} onClick={() => void retrySolver().catch(() => undefined)} title={getSolverError() ?? undefined}>
+                Try again
+              </button>
+            </p>
+          )}
         </>
       )}
     </main>
   )
 }
+
+// Far longer than any turn takes to draw (220 ms at normal speed).
+const ANIMATION_WATCHDOG_MS = 3000
 
 const TIPS_KEY = 'palmtwist.tips.v1'
 

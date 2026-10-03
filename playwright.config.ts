@@ -9,6 +9,13 @@ export default defineConfig({
   // workers -- 17/17 passed reliably at workers: 1, 2-3 failed intermittently
   // at the default. One worker is slower overall but deterministic.
   workers: 1,
+  // The cube is drawn by software in a headless browser, which is many times
+  // slower than a graphics card and varies a lot between machines. Budgets are
+  // generous so a slow machine reads as slow, not as broken; one retry absorbs
+  // a stray stall. Logic failures still fail both attempts.
+  timeout: 90_000,
+  expect: { timeout: 15_000 },
+  retries: 1,
   webServer: {
     command: 'npm run dev',
     url: 'http://localhost:5173',

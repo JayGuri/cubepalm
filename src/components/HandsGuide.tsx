@@ -106,11 +106,11 @@ export function HandsKey({ onClose }: { onClose: () => void }) {
             <div className="rounded-md border py-1.5" style={{ borderColor: HAND_COLOR.Left + '66' }}>
               <div style={{ color: HAND_COLOR.Left }}>Left hand</div>
               <div>counter-clockwise ↺</div>
-              <div className="rounded-md border py-1.5" style={{ borderColor: HAND_COLOR.Right + '66' }}>
+            </div>
+            <div className="rounded-md border py-1.5" style={{ borderColor: HAND_COLOR.Right + '66' }}>
               <div style={{ color: HAND_COLOR.Right }}>Right hand</div>
               <div>clockwise ↻</div>
             </div>
-          </div>
           </div>
           <p className="mt-2">Hold the sign still until the ring fills. Relax your hand, then sign again to repeat.</p>
           <ul className="mt-2 space-y-1" data-testid="signs-key">

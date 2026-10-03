@@ -11,6 +11,11 @@ export interface TrackedPiece {
   rotation: Mat3
 }
 
+/** The tracked blocks inside a Mirror Cube state. */
+export function mirrorPiecesOf(state: { raw: unknown }): TrackedPiece[] {
+  return (state.raw as { pieces: TrackedPiece[] }).pieces
+}
+
 const AXIS_INDEX = { x: 0, y: 1, z: 2 } as const
 const IDENTITY: Mat3 = [
   [1, 0, 0],
@@ -49,6 +54,22 @@ function axisRotation(axis: 0 | 1 | 2, angle: number): Mat3 {
   if (axis === 0) return [[1, 0, 0], [0, c, -s], [0, s, c]]
   if (axis === 1) return [[c, 0, s], [0, 1, 0], [-s, 0, c]]
   return [[c, -s, 0], [s, c, 0], [0, 0, 1]]
+}
+
+/**
+ * The Mirror Cube is solved when its blocks make a clean cube again. That is a
+ * statement about shape: every block has been carried by one and the same
+ * whole-cube rotation, so each sits where it started relative to the others
+ * (the cube may simply be held another way up). Centres are 1x1 squares, so a
+ * centre spun in place looks no different and only its slot is checked.
+ */
+export function piecesSolved(pieces: TrackedPiece[]): boolean {
+  const whole = pieces.find((p) => p.home.every((v) => v !== 0))!.rotation // any corner fixes the rotation
+  return pieces.every((p) => {
+    const isCentre = p.home.filter((v) => v !== 0).length === 1
+    if (isCentre) return currentSlot(p).every((v, i) => v === mulVec(whole, p.home)[i])
+    return p.rotation.every((row, i) => row.every((v, j) => v === whole[i][j]))
+  })
 }
 
 // Pure: returns new pieces. Direction comes from parseCubeMove, which is

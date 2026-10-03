@@ -3,7 +3,7 @@ import type { Move, PuzzlePlugin, PuzzleState } from '../PuzzlePlugin'
 import * as cube3 from '../cube3/logic'
 import { facesOfSlot } from '../cube3/geometry'
 import { buildMirrorGeometry, mirrorPieceId } from './geometry'
-import { applyMoveToPieces, createPieces, type TrackedPiece } from './pieces'
+import { applyMoveToPieces, createPieces, piecesSolved, type TrackedPiece } from './pieces'
 
 export const MIRROR_SILVER = '#C0C0C0'
 
@@ -14,9 +14,7 @@ interface MirrorRaw {
 
 const rawOf = (state: PuzzleState) => state.raw as MirrorRaw
 
-export function mirrorPiecesOf(state: PuzzleState): TrackedPiece[] {
-  return rawOf(state).pieces
-}
+export { mirrorPiecesOf } from './pieces'
 
 // Same group as the 3x3 (centre orientation ignored), so logic, scramble and
 // the Kociemba solver all delegate to cube3; only the piece tracker is extra.
@@ -37,7 +35,9 @@ export async function createMirrorPlugin(): Promise<PuzzlePlugin> {
         },
       }
     },
-    isSolved: (state) => cube3.isSolved(rawOf(state).pattern),
+    // Shape is the authority here. The 3x3 pattern alongside it exists for the
+    // solver and scrambler, and the tests hold the two to agreeing.
+    isSolved: (state) => piecesSolved(rawOf(state).pieces),
     scramble: cube3.scramble,
     solve: async (_state, history: Move[], effort) => solveFromHistory(history, 90, { keepOrientation: true, effort }),
     refine: (history: Move[], bound, onUpdate) => refineFromHistory(history, bound, onUpdate, { keepOrientation: true }),

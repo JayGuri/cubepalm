@@ -60,3 +60,38 @@ test('the solver is warmed at startup, not on first Solve press', async ({ page 
     timeout: 30_000,
   })
 })
+
+test('with the solver worker blocked, the app falls back and still scrambles and solves', async ({ page }) => {
+  test.setTimeout(120_000)
+  await page.route('**/kociemba.worker*', (route) => route.abort())
+  await page.goto('/play/cube3')
+  // Not stuck warming: it says it is answering from the main thread.
+  await expect(page.getByTestId('app')).toHaveAttribute('data-solver-state', 'fallback', { timeout: 30_000 })
+  await page.getByRole('button', { name: /scramble/i }).click()
+  await expect(page.getByTestId('solved-status')).toHaveText('Scrambled')
+  await expect(page.getByRole('button', { name: /solve for me/i })).toBeEnabled({ timeout: 60_000 })
+  await page.getByRole('button', { name: /solve for me/i }).click()
+  await expect(page.getByTestId('solved-status')).toHaveText('Solved', { timeout: 60_000 })
+})
+
+test('keys pressed while the scramble is being dealt are ignored, not buried in it', async ({ page }) => {
+  test.setTimeout(90_000)
+  await page.goto('/play/cube3')
+  await expect(page.getByTestId('app')).toHaveAttribute('data-solver-ready', 'true', { timeout: 30_000 })
+  await page.getByRole('button', { name: /scramble/i }).click()
+  await expect(page.getByTestId('solved-status')).toHaveText('Scrambled')
+  for (const key of ['r', 'u', 'f']) await page.keyboard.press(key)
+  await expect(page.getByRole('button', { name: /solve for me/i })).toBeEnabled({ timeout: 60_000 })
+  await expect(page.getByTestId('move-count')).toHaveText('0 moves')
+})
+
+test('Reset straight after a turn leaves a solved cube, with nothing landing late', async ({ page }) => {
+  await page.goto('/play/cube3')
+  await expect(page.getByTestId('puzzle-canvas')).toHaveAttribute('data-ready', 'true')
+  for (const key of ['r', 'u', 'f', 'r', 'u']) await page.keyboard.press(key)
+  await page.getByRole('button', { name: /reset/i }).click()
+  await expect(page.getByTestId('solved-status')).toHaveText('Solved')
+  await page.waitForTimeout(2500)
+  await expect(page.getByTestId('solved-status')).toHaveText('Solved')
+  await expect(page.getByTestId('move-count')).toHaveText('0 moves')
+})

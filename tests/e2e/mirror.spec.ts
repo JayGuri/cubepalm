@@ -24,19 +24,21 @@ test('a turn and its inverse bring the Mirror Cube back to its solved shape', as
 })
 
 test('Scramble then Solve for me returns the Mirror Cube to solved', async ({ page }) => {
-  test.setTimeout(90_000)
+  // The Mirror Cube's metal blocks draw slowly without a graphics card (about a
+  // second a turn in a headless browser), so this is given time, not a race.
+  test.setTimeout(240_000)
   await page.goto('/play/mirror')
-  await expect(page.getByTestId('app')).toHaveAttribute('data-solver-ready', 'true', { timeout: 15_000 })
+  await expect(page.getByTestId('app')).toHaveAttribute('data-solver-ready', 'true', { timeout: 30_000 })
   await page.getByRole('button', { name: /scramble/i }).click()
   await expect(page.getByTestId('solved-status')).toHaveText('Scrambled', { timeout: 30_000 })
-  await expect(page.getByRole('button', { name: /solve for me/i })).toBeEnabled({ timeout: 30_000 })
+  await expect(page.getByRole('button', { name: /solve for me/i })).toBeEnabled({ timeout: 90_000 })
   await page.getByRole('button', { name: /solve for me/i }).click()
-  await expect(page.getByTestId('solved-status')).toHaveText('Solved', { timeout: 30_000 })
+  await expect(page.getByTestId('solved-status')).toHaveText('Solved', { timeout: 120_000 })
 })
 
 test('the guide works on the Mirror Cube', async ({ page }) => {
   await page.goto('/play/mirror')
-  await expect(page.getByTestId('app')).toHaveAttribute('data-solver-ready', 'true', { timeout: 15_000 })
+  await expect(page.getByTestId('app')).toHaveAttribute('data-solver-ready', 'true', { timeout: 30_000 })
   await page.keyboard.press('u')
   await page.keyboard.press('f')
   await page.getByTestId('guide-me').click()

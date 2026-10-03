@@ -11,17 +11,33 @@ const MODEL_PATH = '/models/hand_landmarker.task'
 export class HandLandmarkerService {
   private landmarker: HandLandmarker | null = null
   private lastTimestamp = -1
+  /** Which processor the model ended up on; null until it has started. */
+  delegate: 'GPU' | 'CPU' | null = null
 
   async init(): Promise<void> {
     if (this.landmarker) return
     // Both the runtime and the model are served from our own origin, so the app
     // keeps working offline after first load and never depends on a CDN.
     const vision = await FilesetResolver.forVisionTasks(WASM_PATH)
-    this.landmarker = await HandLandmarker.createFromOptions(vision, {
-      baseOptions: { modelAssetPath: MODEL_PATH, delegate: 'GPU' },
-      runningMode: 'VIDEO',
-      numHands: 2,
-    })
+    const create = (delegate: 'GPU' | 'CPU') =>
+      HandLandmarker.createFromOptions(vision, {
+        baseOptions: { modelAssetPath: MODEL_PATH, delegate },
+        runningMode: 'VIDEO',
+        numHands: 2,
+      })
+    // The GPU is several times faster, but some browsers and drivers refuse it.
+    // The CPU always works, so try that before giving up.
+    try {
+      this.landmarker = await create('GPU')
+      this.delegate = 'GPU'
+    } catch {
+      try {
+        this.landmarker = await create('CPU')
+        this.delegate = 'CPU'
+      } catch {
+        throw new Error('Hand tracking could not start on this device (neither its graphics card nor its processor could run the model).')
+      }
+    }
   }
 
   get ready(): boolean {
@@ -41,6 +57,7 @@ export class HandLandmarkerService {
   dispose(): void {
     this.landmarker?.close()
     this.landmarker = null
+    this.delegate = null
     this.lastTimestamp = -1
   }
 }
@@ -58,21 +75,4 @@ function toLandmarkFrame(
     }
   })
   return { hands, timestampMs }
-}
-
-/** Starts the webcam. Requires HTTPS or localhost (spec 2). */
-export async function startCamera(deviceId?: string): Promise<MediaStream> {
-  if (!navigator.mediaDevices?.getUserMedia) {
-    throw new Error('This browser exposes no camera API. Camera access needs HTTPS.')
-  }
-  return navigator.mediaDevices.getUserMedia({
-    video: deviceId
-      ? { deviceId: { exact: deviceId } }
-      : { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
-    audio: false,
-  })
-}
-
-export function stopCamera(stream: MediaStream | null): void {
-  stream?.getTracks().forEach((track) => track.stop())
 }

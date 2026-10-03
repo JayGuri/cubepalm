@@ -23,6 +23,9 @@ export function Settings() {
             <button
               type="button"
               data-testid="colorblind-toggle"
+              role="switch"
+              aria-checked={settings.colorblindPalette}
+              aria-label="Colorblind-friendly palette"
               className={TOGGLE(settings.colorblindPalette)}
               onClick={() => settings.setColorblindPalette(!settings.colorblindPalette)}
             >
@@ -33,6 +36,7 @@ export function Settings() {
           <Row label="Default input mode" description="Which control scheme Free Play starts in.">
             <select
               data-testid="default-input-mode"
+              aria-label="Default input mode"
               value={settings.defaultInputMode}
               onChange={(e) => settings.setDefaultInputMode(e.target.value as 'mouse' | 'hands')}
               className="rounded-lg border border-white/10 bg-[#202227] px-3 py-1.5 text-sm"
@@ -49,6 +53,9 @@ export function Settings() {
             <button
               type="button"
               data-testid="swap-hands-toggle"
+              role="switch"
+              aria-checked={settings.swapHands}
+              aria-label="Swap left and right hand"
               className={TOGGLE(settings.swapHands)}
               onClick={() => settings.setSwapHands(!settings.swapHands)}
             >

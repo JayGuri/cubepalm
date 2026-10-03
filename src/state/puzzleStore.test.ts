@@ -52,4 +52,14 @@ describe('puzzleStore', () => {
     expect(store().isSolved()).toBe(true)
     expect(store().moveHistory).toHaveLength(0)
   })
+
+  it('a load that finishes late does not overwrite a newer one', async () => {
+    // Two loads started back to back: whichever resolves last must not win
+    // unless it was also the one asked for last.
+    const first = store().load('mirror')
+    const second = store().load('cube3')
+    await Promise.all([first, second])
+    expect(store().plugin?.id).toBe('cube3')
+    expect(store().status).toBe('ready')
+  })
 })

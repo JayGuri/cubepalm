@@ -1,7 +1,9 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { Navigate, Route, BrowserRouter as Router, Routes, useParams } from 'react-router-dom'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { Home } from './components/screens/Home'
 import { lessonById } from './core/academy/lessons'
+import type { SolverStatus } from './core/solvers/kociemba'
 
 // The play screen pulls in three.js, the puzzle engine and MediaPipe glue
 // (~1.5 MB); the home page needs none of it, so each screen loads on demand.
@@ -21,28 +23,31 @@ function LessonRoute() {
 }
 
 function App() {
-  const [solverReady, setSolverReady] = useState(false)
-
-  // Building the solver's pruning tables costs ~0.9s. Warm it once at startup in
-  // a worker rather than on the first Solve press (spec 12.4). A failure here is
-  // not fatal -- everything except Solve still works -- so it is not surfaced as
-  // a blocking error.
+  // The solver's tables are built once at startup, in a worker, rather than on
+  // the first Solve press. Its state is owned by the solver itself (kociemba.ts);
+  // a failure is not fatal -- everything except Solve and Guide still works --
+  // and the play screen offers a retry.
+  const [solver, setSolver] = useState<SolverStatus>('idle')
   useEffect(() => {
+    let unsubscribe = () => {}
     let cancelled = false
-    import('./core/solvers/kociemba')
-      .then((m) => m.initSolver())
-      .catch(() => undefined)
-      .finally(() => {
-        if (!cancelled) setSolverReady(true)
-      })
+    // Loaded on demand so the solver stays out of the home page's bundle.
+    void import('./core/solvers/kociemba').then((m) => {
+      if (cancelled) return
+      unsubscribe = m.subscribeSolverStatus(() => setSolver(m.getSolverStatus()))
+      m.initSolver().catch(() => undefined)
+    })
     return () => {
       cancelled = true
+      unsubscribe()
     }
   }, [])
+  const solverReady = solver === 'ready' || solver === 'fallback'
 
   return (
     <Router>
-      <div data-testid="app" data-solver-ready={solverReady ? 'true' : 'false'}>
+      <div data-testid="app" data-solver-ready={solverReady ? 'true' : 'false'} data-solver-state={solver}>
+        <ErrorBoundary>
         <Suspense fallback={<div className="min-h-dvh bg-[#16171B]" />}>
         <Routes>
           <Route path="/" element={<Home />} />
@@ -53,6 +58,7 @@ function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         </Suspense>
+        </ErrorBoundary>
       </div>
     </Router>
   )

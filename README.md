@@ -80,6 +80,18 @@ An open hand moving orbits the camera, two open hands spreading zoom it, and a c
 - **The Mirror Cube.** Each block remembers where it is and which way it is rotated, so the shape of the whole cube *is* the puzzle state.
 - **Teaching.** Each lesson is a question asked of the cube ("are all four white edges in place?"), checked live to fill the progress bar.
 
+## What it needs, and what happens when it doesn't get it
+
+| | Needs | If it is missing |
+|---|---|---|
+| **The cube** | WebGL, which every current Chrome, Edge, Firefox and Safari has | A message says how to turn hardware acceleration on. If the browser takes the graphics context away mid-session, the cube is rebuilt when it comes back |
+| **Hands** | A webcam, and HTTPS or localhost (browsers only hand out the camera there) | A plain message says whether the camera is blocked, missing or busy. Mouse and keyboard keep working |
+| **Hand tracking** | A graphics card helps | Falls back to the processor: slower, still works |
+| **The solver** | A background worker | If the worker fails to load, crashes or goes quiet, the solver moves to the main thread and carries on. If even that fails, the page says so and offers a retry; the cube stays playable |
+| **Offline** | One visit while online | The app, fonts and solver are cached. Hand tracking is cached the first time Hands is used |
+
+On a phone the cube draws at a lower pixel ratio and the background search uses fewer workers, and that search pauses whenever the tab is hidden. Every push runs the type check, lint, unit tests and browser tests in GitHub Actions.
+
 ## Run it locally
 
 ```bash

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
-import { HandLandmarkerService, startCamera, stopCamera } from './HandLandmarkerService'
+import { startCamera, stopCamera } from './camera'
+import type { HandLandmarkerService } from './HandLandmarkerService'
 import type { LandmarkFrame } from './landmarks'
 import {
   createInitialGestureState,
@@ -69,12 +70,18 @@ export function useHandGestures(options: UseHandGesturesOptions): UseHandGesture
 
     async function setup() {
       let stream: MediaStream | null = null
+      let model: Promise<HandLandmarkerService> | null = null
       try {
         // Ask for the camera straight away so the browser's permission prompt
         // appears the moment Hands is chosen. The hand model (a few MB) loads
         // alongside it instead of in front of it.
-        const service = new HandLandmarkerService()
-        const [, camera] = await Promise.all([service.init(), startCamera().then((s) => (stream = s))])
+        // MediaPipe's code is only downloaded here, the first time Hands is chosen.
+        model = import('./HandLandmarkerService').then(async (m) => {
+          const service = new m.HandLandmarkerService()
+          await service.init()
+          return service
+        })
+        const [service, camera] = await Promise.all([model, startCamera().then((s) => (stream = s))])
         if (cancelled) {
           stopCamera(camera)
           service.dispose()
@@ -89,6 +96,8 @@ export function useHandGestures(options: UseHandGesturesOptions): UseHandGesture
         setReady(true)
       } catch (e) {
         stopCamera(stream)
+        // Whichever half failed, the other must not be left running.
+        void model?.then((service) => service.dispose()).catch(() => undefined)
         if (!cancelled) setError(friendlyCameraError(e))
       }
     }

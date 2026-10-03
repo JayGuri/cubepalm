@@ -3,7 +3,7 @@ import { expect, test, type Page } from '@playwright/test'
 async function open(page: Page) {
   await page.goto('/play/cube3')
   await expect(page.getByTestId('puzzle-canvas')).toHaveAttribute('data-ready', 'true')
-  await expect(page.getByTestId('app')).toHaveAttribute('data-solver-ready', 'true', { timeout: 15_000 })
+  await expect(page.getByTestId('app')).toHaveAttribute('data-solver-ready', 'true', { timeout: 30_000 })
 }
 
 const stepKey = (step: string) => (step.endsWith("'") ? `Shift+${step[0]}` : step[0].toLowerCase())

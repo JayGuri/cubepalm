@@ -7,9 +7,8 @@ import { moveFromDrag, AXIS_INDEX, type Axis, type DragInput } from '../core/ges
 import type { GestureTick } from '../core/gestures/useHandGestures'
 import { MoveArrow } from './MoveArrow'
 import { orbitFromHand } from '../core/gestures/handOrbit'
-import { mirrorPiecesOf } from '../core/puzzles/mirror'
 import { pieceBox } from '../core/puzzles/mirror/geometry'
-import { currentSlot } from '../core/puzzles/mirror/pieces'
+import { currentSlot, mirrorPiecesOf } from '../core/puzzles/mirror/pieces'
 import { applyColorblindPaletteToColors } from '../core/puzzles/colorblindPalette'
 import type { Move, PuzzleMesh, PuzzlePlugin, PuzzleState } from '../core/puzzles/PuzzlePlugin'
 
@@ -238,7 +237,19 @@ function Pieces({
   // 26 in an E2E run, only under the dev server (StrictMode is dev-only).
   const handledMoveRef = useRef<Move | null>(null)
   useEffect(() => {
-    if (!animatingMove || handledMoveRef.current === animatingMove) return
+    if (!animatingMove) {
+      // The turn was called off (Reset, a new scramble, the watchdog): stop
+      // drawing it, so its ending can't be mistaken for the next turn's.
+      if (activeAnim.current) {
+        activeAnim.current = null
+        for (const [pieceId, group] of pieceGroupRefs.current) {
+          const pose = posesRef.current.get(pieceId)
+          if (pose) group.quaternion.copy(pose.base)
+        }
+      }
+      return
+    }
+    if (handledMoveRef.current === animatingMove) return
     handledMoveRef.current = animatingMove
     const parsed = parseCubeMove(animatingMove.alg.toString())
     if (!parsed) {
@@ -485,7 +496,8 @@ function PuzzleCanvasInner({
   cameraLocked = false,
   previewLayer = null,
   guideMove = null,
-}: PuzzleCanvasProps) {
+  onContextRestored,
+}: PuzzleCanvasProps & { onContextRestored?: () => void }) {
   const mesh = useMemo(() => plugin.buildGeometry(), [plugin])
   // The camera is framed for cube3's ~2.6-unit half-diagonal. Pyraminx and
   // Megaminx use a unit-radius base solid, so without this they rendered at
@@ -562,8 +574,16 @@ function PuzzleCanvasInner({
     >
       <Canvas
         camera={{ position: [5.5, 5, 6.5], fov: 40 }}
-        dpr={[1, 2]}
-        onCreated={() => setReady(true)}
+        // Phone screens report 3x and more; past 1.5 the cube looks no sharper
+        // and the GPU does four times the work.
+        dpr={[1, matchMedia('(pointer: coarse)').matches ? 1.5 : 2]}
+        onCreated={({ gl }) => {
+          setReady(true)
+          // The browser can take the graphics context away (driver reset, too
+          // many tabs). Allow it to be given back, and remount when it is.
+          gl.domElement.addEventListener('webglcontextlost', (e) => e.preventDefault())
+          gl.domElement.addEventListener('webglcontextrestored', () => onContextRestored?.())
+        }}
       >
         <FitToScreen />
         <color attach="background" args={['#16171B']} />
@@ -635,7 +655,9 @@ function webglAvailable(): boolean {
 }
 
 export function PuzzleCanvas(props: PuzzleCanvasProps) {
-  if (webglAvailable()) return <PuzzleCanvasInner {...props} />
+  // Bumped when a lost graphics context comes back, to rebuild the scene on it.
+  const [epoch, setEpoch] = useState(0)
+  if (webglAvailable()) return <PuzzleCanvasInner key={epoch} {...props} onContextRestored={() => setEpoch((n) => n + 1)} />
   return (
     <div className={`${props.className ?? ''} grid place-items-center p-8 text-center`} data-testid="no-webgl">
       <div className="max-w-sm">

@@ -31,7 +31,15 @@ export default defineConfig({
         // precaching them would bloat the service worker's install step far
         // beyond what the core app needs. A runtime CacheFirst rule still
         // lets them work offline once a user has opened Hands mode once.
-        globIgnores: ['mediapipe/**', 'models/**'],
+        // Also left out: the other puzzles that ship inside cubing.js (megaminx,
+        // 4x4x4 and so on). The app never loads them, so installing them into
+        // every visitor's cache would be about 270 kB of waste.
+        globIgnores: [
+          'mediapipe/**',
+          'models/**',
+          'assets/puzzles-dynamic-{4x4x4,megaminx,unofficial,side-events}-*',
+          'assets/puzzle-geometry-*',
+        ],
         runtimeCaching: [
           {
             urlPattern: /\/(mediapipe|models)\//,

@@ -16,6 +16,9 @@ export interface PuzzleStore {
   isSolved: () => boolean
 }
 
+// Counts loads, so one that finishes late can tell it has been overtaken.
+let loadGeneration = 0
+
 export const usePuzzleStore = create<PuzzleStore>((set, get) => ({
   plugin: null,
   state: null,
@@ -24,6 +27,7 @@ export const usePuzzleStore = create<PuzzleStore>((set, get) => ({
   error: null,
 
   load: async (id) => {
+    const generation = ++loadGeneration
     const loader = PUZZLE_REGISTRY[id]
     if (!loader) {
       set({ status: 'error', error: `unknown puzzle: ${id}` })
@@ -32,6 +36,7 @@ export const usePuzzleStore = create<PuzzleStore>((set, get) => ({
     set({ status: 'loading', error: null })
     try {
       const plugin = await loader()
+      if (generation !== loadGeneration) return // a newer load has started; this one is stale
       set({
         plugin,
         state: plugin.createInitialState(),
@@ -39,6 +44,7 @@ export const usePuzzleStore = create<PuzzleStore>((set, get) => ({
         status: 'ready',
       })
     } catch (e) {
+      if (generation !== loadGeneration) return
       set({ status: 'error', error: (e as Error).message })
     }
   },

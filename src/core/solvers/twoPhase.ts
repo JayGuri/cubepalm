@@ -316,11 +316,10 @@ function buildPrune(
 const STILL = new Uint16Array(N_MOVES)
 const buildPrune1 = (n: number, move: Uint16Array, goal: number) => buildPrune(1, n, STILL, move, ALL_MOVES, 0, goal)
 
-/** Builds every move and pruning table once (about two and a half seconds, 12 MB). Safe to call repeatedly. */
+/** Builds the two-phase move and pruning tables once. Safe to call repeatedly. */
 export function initTwoPhase(): void {
   if (tables) return
   buildTwoPhaseTables()
-  buildProofTables()
 }
 
 function buildTwoPhaseTables(): void {
@@ -375,9 +374,13 @@ const EDGES_A = [UR, UF, UL]
 const EDGES_B = [UB, DR, DF]
 const SLICE_EDGES = [FR, FL, BL, BR]
 
-/** Everything the solver needs is built by initTwoPhase; this name stays for callers that only care about the proofs. */
+/**
+ * The optimal search's extra tables. Only the worker that answers Solve needs
+ * them; the two-phase search runs without, so helpers skip this cost.
+ */
 export function initProofTables(): void {
   initTwoPhase()
+  if (!proofTables) buildProofTables()
 }
 
 function buildProofTables(): void {
@@ -468,10 +471,6 @@ interface Root {
   tw: number
   fl: number
   sl: number
-  cp: number
-  ea: number
-  eb: number
-  s4: number
 }
 
 /**
@@ -521,10 +520,6 @@ export class RefineJob {
   private readonly tw = new Int32Array(STACK)
   private readonly fl = new Int32Array(STACK)
   private readonly sl = new Int32Array(STACK)
-  private readonly cp = new Int32Array(STACK)
-  private readonly ea = new Int32Array(STACK)
-  private readonly eb = new Int32Array(STACK)
-  private readonly s4 = new Int32Array(STACK)
   private readonly spent = new Int32Array(STACK)
   private readonly last = new Int32Array(STACK)
   private readonly next = new Int32Array(STACK)
@@ -541,17 +536,12 @@ export class RefineJob {
       tw: twistOf(v.start.co),
       fl: flipOf(v.start.eo),
       sl: slicePositionOf(v.start.ep),
-      cp: permRank(v.start.cp, 8),
-      ea: edgeSlotsOf(v.start.ep, EDGES_A),
-      eb: edgeSlotsOf(v.start.ep, EDGES_B),
-      s4: edgeSlotsOf(v.start.ep, SLICE_EDGES),
     }))
   }
 
   /** Advance for about `budgetMs`. Returns true once the search is finished. */
   run(budgetMs: number): boolean {
     const t = tables!
-    const p = proofTables!
     const deadline = performance.now() + budgetMs
     let nodes = 0
     for (;;) {
@@ -578,15 +568,6 @@ export class RefineJob {
             this.depth--
             continue
           }
-          // The whole-cube bound can only cut anything once the best route is within
-          // reach of it (it never exceeds about 12), so skip the lookups until then.
-          if (spent + 12 >= this.bestCost) {
-            const whole = Math.max(g1, p.pruneCorners[this.cp[d]], p.pruneEdges6[this.ea[d] * N_EDGE3 + this.eb[d]], p.pruneSlice[this.s4[d]])
-            if (spent + whole >= this.bestCost) {
-              this.depth--
-              continue
-            }
-          }
           if (g1 === 0 && spent === this.threshold) {
             // Ending on a phase-2 move would just be a cheaper phase 1 plus that move.
             if (this.last[d] < 0 || !isPhase2Move(this.last[d])) this.leaf(d)
@@ -608,10 +589,6 @@ export class RefineJob {
         this.tw[c] = t.twistMove[this.tw[d] * N_MOVES + m]
         this.fl[c] = t.flipMove[this.fl[d] * N_MOVES + m]
         this.sl[c] = t.sliceMove[this.sl[d] * N_MOVES + m]
-        this.cp[c] = p.cpermMove[this.cp[d] * N_MOVES + m]
-        this.ea[c] = p.edge3Move[this.ea[d] * N_MOVES + m]
-        this.eb[c] = p.edge3Move[this.eb[d] * N_MOVES + m]
-        this.s4[c] = p.edge4Move[this.s4[d] * N_MOVES + m]
         this.spent[c] = this.spent[d] + quarterCost(m)
         this.last[c] = m
         this.fresh[c] = 1
@@ -632,10 +609,6 @@ export class RefineJob {
     this.tw[0] = r.tw
     this.fl[0] = r.fl
     this.sl[0] = r.sl
-    this.cp[0] = r.cp
-    this.ea[0] = r.ea
-    this.eb[0] = r.eb
-    this.s4[0] = r.s4
     this.spent[0] = 0
     this.last[0] = -1
     this.fresh[0] = 1
