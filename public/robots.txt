@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://cube-smoky-iota.vercel.app/sitemap.xml
+Sitemap: https://cubepalm.vercel.app/sitemap.xml

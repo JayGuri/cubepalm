@@ -9,7 +9,7 @@
 Raise a few fingers at your webcam and a layer of the cube turns.
 Everything runs in your browser, so your camera feed never leaves your device.
 
-[**Live demo**](https://cube-smoky-iota.vercel.app) &nbsp;·&nbsp; [How it works](#how-it-works) &nbsp;·&nbsp; [Run it locally](#run-it-locally)
+[**Live demo**](https://cubepalm.vercel.app) &nbsp;·&nbsp; [How it works](#how-it-works) &nbsp;·&nbsp; [Run it locally](#run-it-locally)
 
 ![React](https://img.shields.io/badge/React_19-20232a?logo=react&logoColor=61dafb)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178c6?logo=typescript&logoColor=white)
