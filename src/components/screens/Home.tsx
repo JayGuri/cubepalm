@@ -6,7 +6,7 @@ import { ColourStrip, SiteNav } from '../SiteNav'
 import { Logo } from '../Logo'
 import { SignPlayground } from '../SignPlayground'
 
-const GITHUB = 'https://github.com/JayGuri/cube'
+const GITHUB = 'https://github.com/JayGuri/cubepalm'
 
 // Small sticker-grid drawings for the puzzle tiles. They sit half off the edge
 // of the tile, like a cube picked up from the table.

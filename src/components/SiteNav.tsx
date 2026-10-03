@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import { Logo } from './Logo'
 
-const GITHUB = 'https://github.com/JayGuri/cube'
+const GITHUB = 'https://github.com/JayGuri/cubepalm'
 
 // One tile per colour of the cube. Each is a way into the app, so the palette
 // the whole site is built on is also the menu.
