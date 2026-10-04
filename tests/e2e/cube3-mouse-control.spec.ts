@@ -95,3 +95,60 @@ test('Reset straight after a turn leaves a solved cube, with nothing landing lat
   await expect(page.getByTestId('solved-status')).toHaveText('Solved')
   await expect(page.getByTestId('move-count')).toHaveText('0 moves')
 })
+
+test('on a phone the tips start closed, and the ? button brings them back', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/play/cube3')
+  await expect(page.getByTestId('puzzle-canvas')).toHaveAttribute('data-ready', 'true')
+  await expect(page.getByTestId('mouse-tips')).toHaveCount(0)
+  await page.getByTestId('tips-open').click()
+  await expect(page.getByTestId('mouse-tips')).toBeVisible()
+  await page.getByRole('button', { name: 'Hide tips' }).click()
+  await expect(page.getByTestId('mouse-tips')).toHaveCount(0)
+  await expect(page.getByTestId('tips-open')).toBeVisible()
+})
+
+test('each page sets its own title and canonical address', async ({ page }) => {
+  const canonical = () => page.locator('link[rel="canonical"]').getAttribute('href')
+  await page.goto('/')
+  await expect(page).toHaveTitle(/online Rubik's Cube you solve with hand gestures/)
+  await page.goto('/learn/cross')
+  await expect(page).toHaveTitle(/lesson 2 of 8/)
+  expect(await canonical()).toBe('https://cubepalm.vercel.app/learn/cross')
+  await page.goto('/play/mirror')
+  await expect(page).toHaveTitle(/Mirror Cube/)
+  // Moving between pages inside the app (no reload) updates it too.
+  await page.goto('/')
+  await page.getByRole('link', { name: 'Learn', exact: true }).click()
+  await expect(page).toHaveTitle(/Learn to solve a Rubik's Cube/)
+  expect(await canonical()).toBe('https://cubepalm.vercel.app/learn')
+})
+
+test('a lost graphics context is rebuilt when the browser gives it back', async ({ page }) => {
+  test.setTimeout(120_000)
+  await page.goto('/play/cube3')
+  const canvas = page.getByTestId('puzzle-canvas')
+  await expect(canvas).toHaveAttribute('data-ready', 'true')
+  for (const key of ['r', 'u']) await page.keyboard.press(key)
+  const lost = await page.evaluate(`(() => {
+    const c = document.querySelector('[data-testid="puzzle-canvas"] canvas')
+    const gl = c.getContext('webgl2') || c.getContext('webgl')
+    const ext = gl.getExtension('WEBGL_lose_context')
+    if (!ext) return 'unsupported'
+    c.setAttribute('data-before-loss', 'yes')
+    window.__ctxEvents = []
+    c.addEventListener('webglcontextlost', () => window.__ctxEvents.push('lost'))
+    c.addEventListener('webglcontextrestored', () => window.__ctxEvents.push('restored'))
+    ext.loseContext()
+    setTimeout(() => ext.restoreContext(), 300)
+    return 'ok'
+  })()`)
+  test.skip(lost === 'unsupported', 'this browser cannot simulate a lost context')
+  await page.waitForFunction('window.__ctxEvents.includes("restored")', null, { timeout: 15_000 })
+  // The scene is rebuilt on a fresh canvas, still showing the turns made, and still turns.
+  await expect(canvas).toHaveAttribute('data-ready', 'true')
+  await expect(page.locator('canvas[data-before-loss]')).toHaveCount(0)
+  await expect(page.getByTestId('solved-status')).toHaveText('Scrambled')
+  await page.keyboard.press('f')
+  await expect(page.getByTestId('move-count')).toHaveText('3 moves')
+})

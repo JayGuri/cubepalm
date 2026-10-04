@@ -59,3 +59,6 @@ export function describeStep(notation: string): string {
   const prime = notation.endsWith("'")
   return `Turn the ${FACE_NAME[face] ?? face} ${prime ? 'counter-clockwise' : 'clockwise'}`
 }
+
+/** "R" <-> "R'" (quarter turns only, as the guide shows them). */
+export const invertStep = (step: string) => (step.endsWith("'") ? step.slice(0, -1) : `${step}'`)

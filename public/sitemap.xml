@@ -2,6 +2,14 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://cubepalm.vercel.app/</loc></url>
   <url><loc>https://cubepalm.vercel.app/learn</loc></url>
+  <url><loc>https://cubepalm.vercel.app/learn/basics</loc></url>
+  <url><loc>https://cubepalm.vercel.app/learn/cross</loc></url>
+  <url><loc>https://cubepalm.vercel.app/learn/corners</loc></url>
+  <url><loc>https://cubepalm.vercel.app/learn/middle</loc></url>
+  <url><loc>https://cubepalm.vercel.app/learn/top-cross</loc></url>
+  <url><loc>https://cubepalm.vercel.app/learn/top-face</loc></url>
+  <url><loc>https://cubepalm.vercel.app/learn/top-corners</loc></url>
+  <url><loc>https://cubepalm.vercel.app/learn/top-edges</loc></url>
   <url><loc>https://cubepalm.vercel.app/play/cube3</loc></url>
   <url><loc>https://cubepalm.vercel.app/play/mirror</loc></url>
 </urlset>

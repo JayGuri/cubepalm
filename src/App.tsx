@@ -1,8 +1,9 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
-import { Navigate, Route, BrowserRouter as Router, Routes, useParams } from 'react-router-dom'
+import { Navigate, Route, BrowserRouter as Router, Routes, useLocation, useParams } from 'react-router-dom'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { Home } from './components/screens/Home'
 import { lessonById } from './core/academy/lessons'
+import { applyPageMeta, pageMeta } from './pageMeta'
 import type { SolverStatus } from './core/solvers/kociemba'
 
 // The play screen pulls in three.js, the puzzle engine and MediaPipe glue
@@ -20,6 +21,13 @@ function PlayRoute() {
 function LessonRoute() {
   const { lessonId = '' } = useParams<{ lessonId: string }>()
   return lessonById(lessonId) ? <FreePlay key={lessonId} lessonId={lessonId} /> : <Navigate to="/learn" replace />
+}
+
+// Keeps the tab title, description and canonical address in step with the page.
+function PageMeta() {
+  const { pathname } = useLocation()
+  useEffect(() => applyPageMeta(pageMeta(pathname)), [pathname])
+  return null
 }
 
 function App() {
@@ -46,6 +54,7 @@ function App() {
 
   return (
     <Router>
+      <PageMeta />
       <div data-testid="app" data-solver-ready={solverReady ? 'true' : 'false'} data-solver-state={solver}>
         <ErrorBoundary>
         <Suspense fallback={<div className="min-h-dvh bg-[#16171B]" />}>
