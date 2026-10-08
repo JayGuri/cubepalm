@@ -86,11 +86,11 @@ An open hand moving orbits the camera, two open hands spreading zoom it, and a c
 |---|---|---|
 | **The cube** | WebGL, which every current Chrome, Edge, Firefox and Safari has | A message says how to turn hardware acceleration on. If the browser takes the graphics context away mid-session, the cube is rebuilt when it comes back |
 | **Hands** | A webcam, and HTTPS or localhost (browsers only hand out the camera there) | A plain message says whether the camera is blocked, missing or busy. Mouse and keyboard keep working |
-| **Hand tracking** | A graphics card helps | Falls back to the processor: slower, still works |
+| **Hand tracking** | A background worker and a graphics card | Without the worker it runs on the main thread at a rate the device can afford; without the graphics card it uses the processor. Slower, still works |
 | **The solver** | A background worker | If the worker fails to load, crashes or goes quiet, the solver moves to the main thread and carries on. If even that fails, the page says so and offers a retry; the cube stays playable |
 | **Offline** | One visit while online | The app, fonts and solver are cached. Hand tracking is cached the first time Hands is used |
 
-On a phone the cube draws at a lower pixel ratio and the background search uses fewer workers, and that search pauses whenever the tab is hidden. Every push runs the type check, lint, unit tests and browser tests in GitHub Actions.
+Camera frames never pass through React: the hand model runs in a worker, the skeleton is drawn straight to its canvas, and the 3D scene only redraws when something changes, so a cube sitting still costs nothing. On a touch screen a row of turn buttons stands in for the keyboard. On a phone the cube draws at a lower pixel ratio and the background search uses fewer workers, and that search pauses whenever the tab is hidden. Every push runs the type check, lint, unit tests and browser tests in GitHub Actions.
 
 ## Run it locally
 

@@ -217,7 +217,7 @@ export function Home() {
             <span className="text-[#ECEAE4]"><Logo size={32} /></span>
             <p>
               Made by{' '}
-              <a href="https://github.com/JayGuri" target="_blank" rel="noreferrer" className="text-[#ECEAE4] underline-offset-4 hover:underline">
+              <a href="https://github.com/JayGuri" target="_blank" rel="noreferrer" className="text-[#ECEAE4] underline decoration-white/40 underline-offset-4 hover:decoration-white">
                 Jay Guri
               </a>
               . Runs entirely in your browser.

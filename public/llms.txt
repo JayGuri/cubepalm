@@ -1,0 +1,15 @@
+# CubePalm
+
+> A free Rubik's Cube and Mirror Cube that runs in the browser and can be turned with hand gestures read from a webcam. Nothing is uploaded: hand tracking, the solver and the 3D all run on the visitor's device.
+
+## Pages
+
+- [Home](https://cubepalm.vercel.app/): what CubePalm is, with a try-it demo of the finger signs
+- [3x3 Cube](https://cubepalm.vercel.app/play/cube3): scramble, solve by mouse, keyboard, touch or hand signs, with a step-by-step guide
+- [Mirror Cube](https://cubepalm.vercel.app/play/mirror): a one-colour cube solved by shape
+- [Learn](https://cubepalm.vercel.app/learn): eight lessons on the layer-by-layer method
+
+## How it works
+
+- [The maths](https://github.com/JayGuri/cubepalm/blob/main/docs/MATH.md): the cube as a group, the two-phase solver, gesture recognition
+- [Source code](https://github.com/JayGuri/cubepalm)

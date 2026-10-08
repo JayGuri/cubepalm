@@ -45,6 +45,12 @@ function App() {
       unsubscribe = m.subscribeSolverStatus(() => setSolver(m.getSolverStatus()))
       m.initSolver().catch(() => undefined)
     })
+    // Fetch the play screen's code while the visitor is still reading the home
+    // page, so the first click on Play opens at once. Skipped for anyone who has
+    // asked their browser to save data.
+    const saveData = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData
+    const idle = (run: () => void) => (window.requestIdleCallback ? window.requestIdleCallback(run) : window.setTimeout(run, 1500))
+    if (!saveData) idle(() => void import('./components/screens/FreePlay').catch(() => undefined))
     return () => {
       cancelled = true
       unsubscribe()

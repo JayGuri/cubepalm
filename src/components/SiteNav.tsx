@@ -10,7 +10,7 @@ const TILES = [
   { label: '3×3', to: '/play/cube3', colour: '#2FB36B' },
   { label: 'Mirror', to: '/play/mirror', colour: '#5B8DEF' },
   { label: 'Settings', to: '/settings', colour: '#F4F5F8' },
-  { label: 'Maths', to: `${GITHUB}/blob/main/docs/MATH.md`, colour: '#E5384F' },
+  { label: 'Maths', to: `${GITHUB}/blob/main/docs/MATH.md`, colour: '#F0566B' },
   { label: 'Source', to: GITHUB, colour: '#FFD500' },
 ] as const
 
