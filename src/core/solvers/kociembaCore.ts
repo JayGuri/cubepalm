@@ -101,7 +101,7 @@ export class Refiner {
   private readonly startedAt = performance.now()
   private readonly maxMs: number
 
-  constructor(scrambleAlg: string, bound?: number, maxMs = 90_000, slice?: { index: number; count: number }) {
+  constructor(scrambleAlg: string, bound?: number, maxMs = 12_000, slice?: { index: number; count: number }) {
     this.maxMs = maxMs
     const alg = scrambleAlg.trim()
     validate(alg)

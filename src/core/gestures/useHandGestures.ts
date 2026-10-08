@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import { startCamera, stopCamera } from './camera'
-import type { HandLandmarkerService } from './HandLandmarkerService'
+import { createHandTracker, type HandTracker } from './handTracker'
 import type { LandmarkFrame } from './landmarks'
 import {
   createInitialGestureState,
@@ -15,9 +15,30 @@ import {
 // without a camera; this hook is the thin, inherently-manual-test seam that
 // wires it to a real getUserMedia stream (spec 8.1/12.2).
 
-export interface GestureTick {
-  seq: number
-  events: GestureEvent[]
+/**
+ * Camera frames as they arrive, about 25 a second. This is deliberately not
+ * React state: a screen that re-rendered on every frame spent most of its time
+ * re-rendering. Whoever needs a frame subscribes, does its sums outside React,
+ * and only sets state when something a person can see has changed.
+ */
+export interface GestureFeed {
+  subscribe(listener: (frame: LandmarkFrame, events: GestureEvent[]) => void): () => void
+}
+
+type FrameListener = (frame: LandmarkFrame, events: GestureEvent[]) => void
+
+/** A feed plus the means to push frames into it. */
+export function createGestureFeed(): GestureFeed & { emit: FrameListener } {
+  const listeners = new Set<FrameListener>()
+  return {
+    subscribe(listener) {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    },
+    emit(frame, events) {
+      for (const listener of listeners) listener(frame, events)
+    },
+  }
 }
 
 export interface UseHandGesturesOptions {
@@ -30,9 +51,9 @@ export interface UseHandGesturesOptions {
 
 export interface UseHandGesturesResult {
   videoRef: RefObject<HTMLVideoElement | null>
-  frame: LandmarkFrame | null
-  gestureState: GestureState
-  tick: GestureTick | null
+  feed: GestureFeed
+  /** Where the hand model ended up running, e.g. "worker/GPU"; null until it has started. */
+  tracker: string | null
   error: string | null
   ready: boolean
 }
@@ -51,18 +72,16 @@ export function useHandGestures(options: UseHandGesturesOptions): UseHandGesture
   const { enabled, thresholds, targetFps = 25 } = options
 
   const videoRef = useRef<HTMLVideoElement>(null)
-  const serviceRef = useRef<HandLandmarkerService | null>(null)
+  const trackerRef = useRef<HandTracker | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const rafRef = useRef<number | null>(null)
   const gestureStateRef = useRef<GestureState>(createInitialGestureState())
   const lastTickAtRef = useRef(0)
-  const seqRef = useRef(0)
+  const [feed] = useState(createGestureFeed)
 
-  const [frame, setFrame] = useState<LandmarkFrame | null>(null)
-  const [tick, setTick] = useState<GestureTick | null>(null)
-  const [gestureState, setGestureState] = useState<GestureState>(createInitialGestureState)
   const [error, setError] = useState<string | null>(null)
   const [ready, setReady] = useState(false)
+  const [tracker, setTracker] = useState<string | null>(null)
 
   useEffect(() => {
     if (!enabled) return
@@ -70,24 +89,20 @@ export function useHandGestures(options: UseHandGesturesOptions): UseHandGesture
 
     async function setup() {
       let stream: MediaStream | null = null
-      let model: Promise<HandLandmarkerService> | null = null
+      let model: Promise<HandTracker> | null = null
       try {
         // Ask for the camera straight away so the browser's permission prompt
         // appears the moment Hands is chosen. The hand model (a few MB) loads
-        // alongside it instead of in front of it.
-        // MediaPipe's code is only downloaded here, the first time Hands is chosen.
-        model = import('./HandLandmarkerService').then(async (m) => {
-          const service = new m.HandLandmarkerService()
-          await service.init()
-          return service
-        })
+        // alongside it instead of in front of it, in a worker where it can.
+        model = createHandTracker()
         const [service, camera] = await Promise.all([model, startCamera().then((s) => (stream = s))])
         if (cancelled) {
           stopCamera(camera)
           service.dispose()
           return
         }
-        serviceRef.current = service
+        trackerRef.current = service
+        setTracker(`${service.where}/${service.delegate}`)
         streamRef.current = camera
         if (videoRef.current) {
           videoRef.current.srcObject = camera
@@ -106,11 +121,12 @@ export function useHandGestures(options: UseHandGesturesOptions): UseHandGesture
     return () => {
       cancelled = true
       setReady(false)
+      setTracker(null)
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
       stopCamera(streamRef.current)
       streamRef.current = null
-      serviceRef.current?.dispose()
-      serviceRef.current = null
+      trackerRef.current?.dispose()
+      trackerRef.current = null
       gestureStateRef.current = createInitialGestureState()
     }
   }, [enabled])
@@ -118,14 +134,9 @@ export function useHandGestures(options: UseHandGesturesOptions): UseHandGesture
   // Everything downstream of detection, shared by the camera loop and the
   // dev-only injection seam below.
   const processFrame = (f: LandmarkFrame) => {
-    setFrame(f)
     const result = stepGesture(gestureStateRef.current, f, thresholds)
     gestureStateRef.current = result.nextState
-    setGestureState(result.nextState)
-
-
-    seqRef.current += 1
-    setTick({ seq: seqRef.current, events: result.events })
+    feed.emit(f, result.events)
   }
 
   // DEV ONLY (compiled out of production builds): lets end-to-end tests drive
@@ -146,25 +157,44 @@ export function useHandGestures(options: UseHandGesturesOptions): UseHandGesture
 
   useEffect(() => {
     if (!enabled) return
-    const minIntervalMs = 1000 / targetFps
+    const baseIntervalMs = 1000 / targetFps
+    let alive = true
+    let busy = false
+    // How long a detection has been taking, smoothed.
+    let costMs = 0
 
     const loop = () => {
+      if (!alive) return
+      rafRef.current = requestAnimationFrame(loop)
       const now = performance.now()
       const video = videoRef.current
-      const service = serviceRef.current
-      if (video && service?.ready && video.readyState >= 2 && now - lastTickAtRef.current >= minIntervalMs) {
-        lastTickAtRef.current = now
-        const f = service.detect(video, now)
-        if (f) processFrameRef.current(f)
-      }
-      rafRef.current = requestAnimationFrame(loop)
+      const tracker = trackerRef.current
+      if (busy || !video || !tracker || video.readyState < 2) return
+      // On the main thread a detection blocks drawing, so it may take at most
+      // about a third of the time: a slow device tracks at a lower rate rather
+      // than stuttering. In a worker it blocks nothing.
+      const interval = tracker.where === 'main' ? Math.max(baseIntervalMs, costMs * 3) : baseIntervalMs
+      if (now - lastTickAtRef.current < interval) return
+      lastTickAtRef.current = now
+      busy = true
+      tracker
+        .detect(video, now)
+        .then((f) => {
+          costMs = costMs === 0 ? performance.now() - now : costMs * 0.8 + (performance.now() - now) * 0.2
+          if (alive && f) processFrameRef.current(f)
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          busy = false
+        })
     }
     rafRef.current = requestAnimationFrame(loop)
     return () => {
+      alive = false
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
     }
   }, [enabled, thresholds, targetFps])
 
-  return { videoRef, frame, gestureState, tick, error, ready }
+  return { videoRef, feed, tracker, error, ready }
 }
 

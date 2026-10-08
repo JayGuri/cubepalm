@@ -223,10 +223,11 @@ let poolDisabled = false
 function poolSize(): number {
   if (typeof navigator === 'undefined') return 1
   const cores = navigator.hardwareConcurrency ?? 2
-  // A phone is also drawing the cube and maybe tracking hands on a battery:
-  // two helpers at most there, four on a desktop, never more than half the cores.
+  // The page itself needs two cores to stay smooth (one to draw the cube, one
+  // for hand tracking), so the helpers share half of what is left: one on a
+  // 4-core laptop, three on 8 cores, and never more than three (two on a phone).
   const phone = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches
-  return Math.min(phone ? 2 : 4, Math.floor(cores / 2))
+  return Math.max(0, Math.min(phone ? 2 : 3, Math.floor((cores - 2) / 2)))
 }
 
 function ensurePool(): Worker[] {

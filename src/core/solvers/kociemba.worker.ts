@@ -22,6 +22,11 @@ export interface SolverResponse {
 
 // The background search, if one is running. It advances in 30 ms slices with a
 // pause between them, so a cancel (or any other request) is heard within ~30 ms.
+// How long one background search may run. Most of what a search will ever find
+// it finds in the first few seconds; running every core flat out for a minute
+// after each scramble bought about half a move and a hot laptop.
+const SEARCH_BUDGET_MS = 12_000
+
 let job: { id: number; refiner: Refiner } | null = null
 let pumping = false
 
@@ -72,7 +77,7 @@ self.onmessage = async (e: MessageEvent<SolverRequest>) => {
       return
     }
     if (request.type === 'refine') {
-      job = { id, refiner: new Refiner(request.scramble, request.bound, 60_000, request.slice) }
+      job = { id, refiner: new Refiner(request.scramble, request.bound, SEARCH_BUDGET_MS, request.slice) }
       void pump()
       return
     }

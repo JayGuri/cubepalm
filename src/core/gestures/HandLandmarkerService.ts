@@ -14,11 +14,12 @@ export class HandLandmarkerService {
   /** Which processor the model ended up on; null until it has started. */
   delegate: 'GPU' | 'CPU' | null = null
 
-  async init(): Promise<void> {
+  /** `inWorker`: load the build of the runtime that a module worker can import. */
+  async init(inWorker = false): Promise<void> {
     if (this.landmarker) return
     // Both the runtime and the model are served from our own origin, so the app
     // keeps working offline after first load and never depends on a CDN.
-    const vision = await FilesetResolver.forVisionTasks(WASM_PATH)
+    const vision = await FilesetResolver.forVisionTasks(WASM_PATH, inWorker)
     const create = (delegate: 'GPU' | 'CPU') =>
       HandLandmarker.createFromOptions(vision, {
         baseOptions: { modelAssetPath: MODEL_PATH, delegate },
@@ -34,8 +35,10 @@ export class HandLandmarkerService {
       try {
         this.landmarker = await create('CPU')
         this.delegate = 'CPU'
-      } catch {
-        throw new Error('Hand tracking could not start on this device (neither its graphics card nor its processor could run the model).')
+      } catch (cause) {
+        throw new Error(
+          `Hand tracking could not start on this device (neither its graphics card nor its processor could run the model). ${(cause as Error)?.message ?? ''}`.trim(),
+        )
       }
     }
   }
@@ -45,7 +48,7 @@ export class HandLandmarkerService {
   }
 
   /** Runs detection for one video frame and converts it to a LandmarkFrame. */
-  detect(video: HTMLVideoElement, timestampMs: number): LandmarkFrame | null {
+  detect(video: HTMLVideoElement | ImageBitmap, timestampMs: number): LandmarkFrame | null {
     if (!this.landmarker) return null
     // MediaPipe rejects a timestamp that does not advance; a paused or stalled
     // video replays the same one, so skip rather than throw.

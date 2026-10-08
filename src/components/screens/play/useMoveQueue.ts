@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Move } from '../../../core/puzzles/PuzzlePlugin'
 import { usePuzzleStore } from '../../../state/puzzleStore'
 
@@ -30,13 +30,15 @@ export function useMoveQueue() {
 
   // The turn in flight is over, however it ended: the canvas finished drawing
   // it, the watchdog gave up on it, or the queue was flushed under it.
-  const handleAnimationComplete = () => {
+  // (Stable identity: it is a prop of the 3D canvas, which skips re-rendering
+  // when its props have not changed.)
+  const handleAnimationComplete = useCallback(() => {
     window.clearTimeout(animTimerRef.current)
     setAnimatingMove(null)
     const resolve = animResolveRef.current
     animResolveRef.current = null
     resolve?.()
-  }
+  }, [])
 
   const applyAnimated = (move: Move) =>
     new Promise<void>((resolve) => {

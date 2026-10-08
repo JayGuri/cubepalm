@@ -14,7 +14,7 @@ import { usePuzzleStore } from '../../../state/puzzleStore'
  * keeps going while you follow it. Every turn you make restarts it from the new
  * position, with the route you have left as the number to beat. It ends when
  * nothing shorter exists (the route is then proven the shortest possible) or
- * after 90 seconds, and it pauses while the tab is hidden.
+ * after about twelve seconds, and it pauses while the tab is hidden.
  *
  * Starting the guide and following the user's moves stay with the screen, since
  * they also drive the move queue and the counters.

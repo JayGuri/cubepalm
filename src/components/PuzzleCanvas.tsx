@@ -1,10 +1,10 @@
 import { OrbitControls } from '@react-three/drei'
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { parseCubeMove } from '../core/animation/parseCubeMove'
 import { moveFromDrag, AXIS_INDEX, type Axis, type DragInput } from '../core/gestures/MouseDragAdapter'
-import type { GestureTick } from '../core/gestures/useHandGestures'
+import type { GestureFeed } from '../core/gestures/useHandGestures'
 import { MoveArrow } from './MoveArrow'
 import { orbitFromHand } from '../core/gestures/handOrbit'
 import { pieceBox } from '../core/puzzles/mirror/geometry'
@@ -31,6 +31,59 @@ const IDENTITY_QUATERNION = new THREE.Quaternion()
 const DIM_TOWARD = new THREE.Color('#16171B')
 const dim = (hex: string) => `#${new THREE.Color(hex).lerp(DIM_TOWARD, 0.3).getHexString()}`
 
+// ---- The 3x3's look: a dark plastic cubie with a rounded sticker on each outer
+// face, like a real cube. Every cubie shares one body material and one sticker
+// shape, and stickers of the same colour share a material, so the whole cube is
+// a handful of materials instead of the 182 it used to create.
+const STICKER_SIZE = 0.86
+const STICKER_RADIUS = 0.15
+// Just proud of the body's surface, so the two never fight for the same depth.
+const STICKER_LIFT = 0.506
+const NO_RAYCAST = () => null
+const STICKER_PLACEMENT: Record<string, { normal: [number, number, number]; rotation: [number, number, number] }> = {
+  R: { normal: [1, 0, 0], rotation: [0, Math.PI / 2, 0] },
+  L: { normal: [-1, 0, 0], rotation: [0, -Math.PI / 2, 0] },
+  U: { normal: [0, 1, 0], rotation: [-Math.PI / 2, 0, 0] },
+  D: { normal: [0, -1, 0], rotation: [Math.PI / 2, 0, 0] },
+  F: { normal: [0, 0, 1], rotation: [0, 0, 0] },
+  B: { normal: [0, 0, -1], rotation: [0, Math.PI, 0] },
+}
+
+let stickerShape: THREE.ShapeGeometry | null = null
+function stickerGeometry(): THREE.ShapeGeometry {
+  if (stickerShape) return stickerShape
+  const h = STICKER_SIZE / 2
+  const r = STICKER_RADIUS
+  const shape = new THREE.Shape()
+  shape.moveTo(-h + r, -h)
+  shape.lineTo(h - r, -h)
+  shape.quadraticCurveTo(h, -h, h, -h + r)
+  shape.lineTo(h, h - r)
+  shape.quadraticCurveTo(h, h, h - r, h)
+  shape.lineTo(-h + r, h)
+  shape.quadraticCurveTo(-h, h, -h, h - r)
+  shape.lineTo(-h, -h + r)
+  shape.quadraticCurveTo(-h, -h, -h + r, -h)
+  stickerShape = new THREE.ShapeGeometry(shape, 6)
+  return stickerShape
+}
+
+const stickerMaterials = new Map<string, THREE.MeshStandardMaterial>()
+function stickerMaterial(hex: string): THREE.MeshStandardMaterial {
+  let material = stickerMaterials.get(hex)
+  if (!material) {
+    material = new THREE.MeshStandardMaterial({ color: hex, roughness: 0.42, metalness: 0 })
+    stickerMaterials.set(hex, material)
+  }
+  return material
+}
+
+let cubieBody: THREE.MeshStandardMaterial | null = null
+function bodyMaterial(): THREE.MeshStandardMaterial {
+  cubieBody ??= new THREE.MeshStandardMaterial({ color: '#0B0C10', roughness: 0.6, metalness: 0.05 })
+  return cubieBody
+}
+
 // Fine light/dark streaks, multiplied over the Mirror Cube's blue, read as
 // brushed metal. Drawn once on a canvas and shared by every tile.
 // Every Mirror piece shares these three materials instead of making its own.
@@ -38,11 +91,11 @@ let sharedMirror: { body: THREE.Material; tile: THREE.Material; dim: THREE.Mater
 function mirrorMaterials() {
   if (!sharedMirror) {
     const tile = (color: string) =>
-      new THREE.MeshStandardMaterial({ color, map: brushedTexture(), metalness: 0.6, roughness: 0.38 })
+      new THREE.MeshStandardMaterial({ color, map: brushedTexture(), metalness: 0.9, roughness: 0.22, envMapIntensity: 1.25 })
     sharedMirror = {
       body: new THREE.MeshStandardMaterial({ color: PLASTIC, roughness: 0.85 }),
-      tile: tile('#6A98F0'),
-      dim: tile('#4E72BC'),
+      tile: tile('#8FB4FF'),
+      dim: tile('#5A78C4'),
     }
   }
   return sharedMirror
@@ -111,7 +164,7 @@ interface PiecesProps {
   onMove: (move: Move | null) => void
   interactive: boolean
   setOrbitEnabled: (enabled: boolean) => void
-  gestureTick?: GestureTick | null
+  gestureFeed?: GestureFeed | null
   previewLayer?: { axis: Axis; layer: number } | null
   colorblindPalette?: boolean
   colorRemap?: Record<string, string>
@@ -138,7 +191,7 @@ function Pieces({
   onMove,
   interactive,
   setOrbitEnabled,
-  gestureTick,
+  gestureFeed,
   previewLayer,
   colorblindPalette,
   colorRemap,
@@ -148,14 +201,13 @@ function Pieces({
   onGestureOrbit,
   onGestureZoom,
 }: PiecesProps) {
-  const { camera } = useThree()
+  const { camera, invalidate } = useThree()
   // Material group order is derived from the plugin's own colorScheme keys,
   // not a hardcoded cube3 face list -- the geometry builder (per-puzzle
   // geometry.ts) always numbers groups 0..N-1 in this same key order, with N
   // the trailing interior/plastic group, so this works unchanged for any
   // puzzle's face count.
   const faceKeys = useMemo(() => Object.keys(plugin.colorScheme), [plugin])
-  const innerGroup = faceKeys.length
 
   // Colours are computed from `colorState`, not the live `state` prop
   // directly: while a move animates, `state` has already flipped (the store
@@ -258,11 +310,14 @@ function Pieces({
       return
     }
     activeAnim.current = { ...parsed, startedAt: performance.now() }
-  }, [animatingMove])
+    invalidate()
+  }, [animatingMove, invalidate])
 
   useFrame(() => {
     const anim = activeAnim.current
     if (!anim) return
+    // The canvas only draws when asked; a turn in progress asks every frame.
+    invalidate()
     const t = Math.min(1, (performance.now() - anim.startedAt) / turnMsRef.current)
     const angle = anim.angle * easeInOutQuad(t)
     const axisVector = AXIS_VECTOR[anim.axis]
@@ -291,7 +346,10 @@ function Pieces({
   })
 
   const drag = useRef<DragStart | null>(null)
-  const lastSeq = useRef(-1)
+  const orbitRef = useRef(onGestureOrbit)
+  orbitRef.current = onGestureOrbit
+  const zoomRef = useRef(onGestureZoom)
+  zoomRef.current = onGestureZoom
 
   // pointerup is bound to the window, not to the meshes: a turn drag routinely
   // ends off the piece it started on (or off the canvas entirely), and an r3f
@@ -349,13 +407,14 @@ function Pieces({
   // with an open hand, zoom with two); layer turns come from Signs, which
   // FreePlay feeds into the same move queue as the mouse and keyboard.
   useEffect(() => {
-    if (!gestureTick || !interactive || gestureTick.seq === lastSeq.current) return
-    lastSeq.current = gestureTick.seq
-    for (const event of gestureTick.events) {
-      if (event.type === 'ORBIT') onGestureOrbit?.(event.dx, event.dy)
-      else if (event.type === 'ZOOM') onGestureZoom?.(event.delta)
-    }
-  }, [gestureTick, interactive, onGestureOrbit, onGestureZoom])
+    if (!gestureFeed || !interactive) return
+    return gestureFeed.subscribe((_frame, events) => {
+      for (const event of events) {
+        if (event.type === 'ORBIT') orbitRef.current?.(event.dx, event.dy)
+        else if (event.type === 'ZOOM') zoomRef.current?.(event.delta)
+      }
+    })
+  }, [gestureFeed, interactive])
 
   return (
     <group>
@@ -424,26 +483,32 @@ function Pieces({
               else pieceGroupRefs.current.delete(piece.pieceId)
             }}
           >
+            {/* The dark plastic body takes the pointer; the stickers are paint on top of it. */}
             <mesh
               geometry={piece.geometry}
+              material={bodyMaterial()}
               userData={{ slot: piece.slot }}
               onPointerDown={(e) => handleDown(e, piece.slot)}
-            >
-              {faceKeys.map((face, i) => (
-                <meshStandardMaterial
+            />
+            {faceKeys.map((face) => {
+              const hex = faceColors[face]
+              const placement = STICKER_PLACEMENT[face]
+              if (!hex || !placement) return null
+              return (
+                <mesh
                   key={face}
-                  attach={`material-${i}`}
-                  color={isDimmed ? dim(faceColors[face] ?? PLASTIC) : (faceColors[face] ?? PLASTIC)}
-                  roughness={0.35}
-                  metalness={0.05}
+                  geometry={stickerGeometry()}
+                  material={stickerMaterial(isDimmed ? dim(hex) : hex)}
+                  position={[
+                    piece.slot[0] + placement.normal[0] * STICKER_LIFT,
+                    piece.slot[1] + placement.normal[1] * STICKER_LIFT,
+                    piece.slot[2] + placement.normal[2] * STICKER_LIFT,
+                  ]}
+                  rotation={placement.rotation}
+                  raycast={NO_RAYCAST}
                 />
-              ))}
-              <meshStandardMaterial
-                attach={`material-${innerGroup}`}
-                color={PLASTIC}
-                roughness={0.9}
-              />
-            </mesh>
+              )
+            })}
           </group>
         )
       })}
@@ -459,7 +524,7 @@ export interface PuzzleCanvasProps {
   interactive?: boolean
   className?: string
   // Live hand-gesture events (camera orbit/zoom), from useHandGestures.
-  gestureTick?: GestureTick | null
+  gestureFeed?: GestureFeed | null
   colorblindPalette?: boolean
   // Shows some colours as others (hex to hex). The Academy flips the cube so
   // the white layer sits at the bottom, without changing the cube itself.
@@ -487,7 +552,7 @@ function PuzzleCanvasInner({
   onMove,
   interactive = true,
   className,
-  gestureTick,
+  gestureFeed,
   colorblindPalette,
   colorRemap,
   turnMs,
@@ -577,6 +642,13 @@ function PuzzleCanvasInner({
         // Phone screens report 3x and more; past 1.5 the cube looks no sharper
         // and the GPU does four times the work.
         dpr={[1, matchMedia('(pointer: coarse)').matches ? 1.5 : 2]}
+        // Draw a frame only when something changed (a turn, the camera, new
+        // colours). A cube sitting still costs nothing, where it used to redraw
+        // at the screen's full refresh rate for as long as the page was open.
+        frameloop="demand"
+        // Colours as authored: the default film-style tone curve turned white
+        // stickers grey and dulled the reds.
+        flat
         onCreated={({ gl }) => {
           setReady(true)
           // The browser can take the graphics context away (driver reset, too
@@ -586,10 +658,13 @@ function PuzzleCanvasInner({
         }}
       >
         <FitToScreen />
-        <color attach="background" args={['#16171B']} />
-        <ambientLight intensity={1.25} />
-        <directionalLight position={[6, 8, 5]} intensity={1.7} />
-        <directionalLight position={[-6, -4, -5]} intensity={0.35} />
+        {/* No background colour: the canvas is see-through, and the stage behind
+            it (a soft glow and a shadow on the floor) is plain CSS. */}
+        {/* Stickers are paint and want even light; the Mirror Cube is metal and
+            wants little of it, so its reflections do the work. */}
+        <ambientLight intensity={plugin.id === 'mirror' ? 0.75 : 1.9} />
+        <directionalLight position={[6, 8, 5]} intensity={plugin.id === 'mirror' ? 2.2 : 1.5} />
+        <directionalLight position={[-6, -4, -5]} intensity={plugin.id === 'mirror' ? 0.7 : 0.5} />
         {plugin.id === 'mirror' && <StudioEnvironment />}
         <group scale={scale}>
           <Pieces
@@ -599,7 +674,7 @@ function PuzzleCanvasInner({
             onMove={onMove}
             interactive={interactive}
             setOrbitEnabled={setOrbitEnabled}
-            gestureTick={gestureTick}
+            gestureFeed={gestureFeed}
             previewLayer={previewLayer}
             colorblindPalette={colorblindPalette}
             colorRemap={colorRemap}
@@ -654,7 +729,10 @@ function webglAvailable(): boolean {
   return webgl
 }
 
-export function PuzzleCanvas(props: PuzzleCanvasProps) {
+// Memoised: drawing the scene's component tree is the most expensive render in
+// the app, and most of what changes on the play screen (the clock, the counters,
+// the camera panel) has nothing to do with it.
+export const PuzzleCanvas = memo(function PuzzleCanvas(props: PuzzleCanvasProps) {
   // Bumped when a lost graphics context comes back, to rebuild the scene on it.
   const [epoch, setEpoch] = useState(0)
   if (webglAvailable()) return <PuzzleCanvasInner key={epoch} {...props} onContextRestored={() => setEpoch((n) => n + 1)} />
@@ -669,42 +747,47 @@ export function PuzzleCanvas(props: PuzzleCanvasProps) {
       </div>
     </div>
   )
-}
+})
 
 // Polished metal is only silver when it has something to reflect. This paints a
 // tiny studio -- a light-to-dark backdrop with a few bright panels -- onto a
 // canvas and bakes it into an environment map once. (drei's <Environment> with
 // light panels did the same job but blocked the page for seconds.)
 function StudioEnvironment() {
-  const { gl, scene } = useThree()
+  const { gl, scene, invalidate } = useThree()
   useEffect(() => {
     const canvas = document.createElement('canvas')
     canvas.width = 256
     canvas.height = 128
     const g = canvas.getContext('2d')!
     const backdrop = g.createLinearGradient(0, 0, 0, 128)
-    backdrop.addColorStop(0, '#dfe5f3')
-    backdrop.addColorStop(0.5, '#6a7186')
-    backdrop.addColorStop(1, '#1c1e28')
+    backdrop.addColorStop(0, '#ffffff')
+    backdrop.addColorStop(0.38, '#aab6d6')
+    backdrop.addColorStop(0.55, '#2c3350')
+    backdrop.addColorStop(1, '#05060a')
     g.fillStyle = backdrop
     g.fillRect(0, 0, 256, 128)
     g.fillStyle = '#ffffff'
-    g.fillRect(20, 14, 70, 26)
-    g.fillRect(150, 10, 80, 20)
+    g.fillRect(10, 8, 90, 34)
+    g.fillRect(140, 6, 100, 30)
     g.fillStyle = '#e8eeff'
-    g.fillRect(100, 52, 56, 12)
+    g.fillRect(96, 50, 64, 14)
+    // A dark band low on one side gives every block a shaded flank.
+    g.fillStyle = '#04050a'
+    g.fillRect(170, 70, 86, 40)
     const source = new THREE.CanvasTexture(canvas)
     source.mapping = THREE.EquirectangularReflectionMapping
     source.colorSpace = THREE.SRGBColorSpace
     const pmrem = new THREE.PMREMGenerator(gl)
     const env = pmrem.fromEquirectangular(source).texture
     Object.assign(scene, { environment: env })
+    invalidate() // drawn on demand: say the reflections have arrived
     source.dispose()
     pmrem.dispose()
     return () => {
       Object.assign(scene, { environment: null })
       env.dispose()
     }
-  }, [gl, scene])
+  }, [gl, scene, invalidate])
   return null
 }

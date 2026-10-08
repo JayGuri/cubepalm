@@ -1,5 +1,5 @@
 import { Alg } from 'cubing/alg'
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { GuidePanel, HandsKey, SignsHud } from '../HandsGuide'
 import { LessonPanel } from '../LessonPanel'
@@ -29,7 +29,9 @@ import {
   type ActiveSign,
 } from '../../core/gestures/signGestures'
 import { createGuide, expandSteps, followMove, invertStep } from '../../core/solvers/solveGuide'
-import { useHandGestures } from '../../core/gestures/useHandGestures'
+import { createGestureFeed, useHandGestures } from '../../core/gestures/useHandGestures'
+import type { GestureEvent } from '../../core/gestures/GestureRecognizer'
+import type { LandmarkFrame } from '../../core/gestures/landmarks'
 import type { Move, PuzzleId } from '../../core/puzzles/PuzzlePlugin'
 import { usePuzzleStore } from '../../state/puzzleStore'
 import { getSolverError, getSolverStatus, quarterTurns, retrySolver, subscribeSolverStatus } from '../../core/solvers/kociemba'
@@ -84,44 +86,50 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
   const [heldSigns, setHeldSigns] = useState<ActiveSign[]>([])
   const signsActive = inputMode === 'hands'
 
-  // Per camera frame: the fist lock (every gesture style) and, in Signs
-  // mode, the sign recognizer, whose turns go through the same animated
-  // move queue as every other input.
-  useEffect(() => {
-    const f = gestures.frame
-    if (inputMode !== 'hands' || !f) return
+  // Per camera frame: the fist lock and the sign recognizer, whose turns go
+  // through the same animated move queue as every other input. All of it runs
+  // outside React; state is only set when something on screen changes (the ring
+  // around a held sign advances in a dozen steps, not twenty-five times a second).
+  const [cameraFeed] = useState(createGestureFeed)
+  const onFrame = (f: LandmarkFrame, events: GestureEvent[]) => {
     const lock = stepFistLock(fistLockRef.current, f, thresholds.fist)
     fistLockRef.current = lock.next
     if (lock.toggled) setCameraLocked((v) => !v)
-    setLockHoldProgress(fistLockProgress(lock.next, f.timestampMs))
+    const hold = Math.round(fistLockProgress(lock.next, f.timestampMs) * 20) / 20
+    setLockHoldProgress((prev) => (prev === hold ? prev : hold))
 
-    if (!signsActive) return
     const opts = { ...DEFAULT_SIGN_OPTIONS, swapHands }
     const r = stepSigns(signsRef.current, f, opts)
     signsRef.current = r.next
     for (const e of r.events) userMove(e.move)
-    setHeldSigns(activeSigns(r.next, f.timestampMs, opts))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gestures.frame, inputMode, signsActive, swapHands])
+    const held = activeSigns(r.next, f.timestampMs, opts).map((s) => ({ ...s, progress: Math.round(s.progress * 12) / 12 }))
+    const key = held.map((s) => `${s.hand}${s.notation}${s.fired}${s.progress}`).join('|')
+    if (key !== heldKeyRef.current) {
+      heldKeyRef.current = key
+      setHeldSigns(held)
+    }
+
+    // Only camera orbit/zoom reach the canvas, and orbit is held while a sign
+    // is up -- a three-finger sign can read as an "open" hand, and holding it
+    // must not drift the camera.
+    const signUp = Boolean(r.next.hands.Left.current || r.next.hands.Right.current)
+    const forCamera = events.filter((e) => e.type === 'ZOOM' || (e.type === 'ORBIT' && !signUp))
+    if (forCamera.length > 0) cameraFeed.emit(f, forCamera)
+  }
+  const heldKeyRef = useRef('')
+  const onFrameRef = useRef(onFrame)
+  onFrameRef.current = onFrame
+  useEffect(() => {
+    if (inputMode !== 'hands') return
+    return gestures.feed.subscribe((f, events) => onFrameRef.current(f, events))
+  }, [gestures.feed, inputMode])
 
   useEffect(() => {
     signsRef.current = createSignState()
+    heldKeyRef.current = ''
     setHeldSigns([])
+    setLockHoldProgress(0)
   }, [signsActive])
-
-  // Only camera orbit/zoom pass through to the canvas, and orbit is held while a sign is up -- a three-finger
-  // sign can read as an "open" hand, and holding it must not drift the
-  // camera.
-  const canvasTick = useMemo(() => {
-    const tick = gestures.tick
-    if (inputMode !== 'hands' || !tick) return null
-    const events = tick.events.filter(
-      (e) =>
-        e.type === 'ZOOM' ||
-        (e.type === 'ORBIT' && !signsRef.current.hands.Left.current && !signsRef.current.hands.Right.current),
-    )
-    return { ...tick, events }
-  }, [gestures.tick, inputMode])
 
   // Every turn -- drag, gesture, key, scramble, solve -- waits in this one queue.
   const { animatingMove, busy, busyRef, setBusy: setBusyBoth, generationRef: queueGenRef, handleAnimationComplete, drainQueue, enqueueMoves, flushQueue } = useMoveQueue()
@@ -375,9 +383,13 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
     if (!guideOptimalRef.current) refineGuide()
   }
 
-  const handleMove = (move: Move | null) => {
-    if (move) userMove(move)
-  }
+  // Stable identity, so the 3D canvas (which takes this as a prop) is not
+  // re-rendered every time this screen is -- the timer alone ticks 5 times a second.
+  const userMoveRef = useRef(userMove)
+  userMoveRef.current = userMove
+  const handleMove = useCallback((move: Move | null) => {
+    if (move) userMoveRef.current(move)
+  }, [])
 
   const handleScramble = async () => {
     if (!plugin) return
@@ -580,12 +592,18 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
             />
           )}
           <div className="relative min-h-0 w-full flex-1">
+            {/* The stage: a glow behind the cube and its shadow on the floor. */}
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0 bg-[radial-gradient(42%_46%_at_50%_44%,rgba(76,201,240,0.10),transparent_70%),radial-gradient(30%_30%_at_62%_60%,rgba(255,213,0,0.06),transparent_70%)]"
+            />
+            <div aria-hidden className="pointer-events-none absolute left-1/2 top-[78%] h-[7%] w-[38%] max-w-md -translate-x-1/2 rounded-[50%] bg-black/55 blur-2xl" />
             <PuzzleCanvas
               plugin={plugin}
               state={state}
               onMove={handleMove}
               className="h-full w-full"
-              gestureTick={canvasTick}
+              gestureFeed={inputMode === 'hands' ? cameraFeed : null}
               colorblindPalette={colorblindPalette}
               colorRemap={lesson ? FLIP_COLORS : undefined}
               turnMs={solveStatus === 'ready' ? Math.round(220 / speed) : undefined}
@@ -624,7 +642,7 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
             {!lesson && inputMode === 'mouse' && !tips.open && guideStatus === 'off' && solveStatus === 'off' && <TipsButton onClick={tips.show} />}
 
             {inputMode === 'hands' && (
-              <CameraPanel videoRef={gestures.videoRef} frame={gestures.frame} error={gestures.error} signs={heldSigns.map((h) => h.notation)} />
+              <CameraPanel videoRef={gestures.videoRef} feed={gestures.feed} tracker={gestures.tracker} ready={gestures.ready} error={gestures.error} signs={heldSigns.map((h) => h.notation)} />
             )}
 
             {inputMode === 'hands' && showHandsHelp && <HandsKey onClose={() => setShowHandsHelp(false)} />}
