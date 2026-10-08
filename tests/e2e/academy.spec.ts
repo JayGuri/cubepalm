@@ -153,10 +153,13 @@ test("after a scramble the move counter starts at 0, separate from the scramble,
   await page.keyboard.press("r")
   await expect(page.getByTestId("move-count")).toHaveText("1 moves")
   await expect(page.getByTestId("solve-timer")).toBeVisible()
-  // Reset clears the session.
+  // Reset goes back to the same scramble and starts the count and the clock over.
+  const scramble = await page.getByTestId("scramble-length").getAttribute("title")
   await page.getByRole("button", { name: /^reset$/i }).click()
-  await expect(page.getByTestId("scramble-length")).toHaveCount(0)
   await expect(page.getByTestId("move-count")).toHaveText("0 moves")
+  await expect(page.getByTestId("solve-timer")).toHaveCount(0)
+  await expect(page.getByTestId("solved-status")).toHaveText("Scrambled")
+  expect(await page.getByTestId("scramble-length").getAttribute("title")).toBe(scramble)
 })
 
 test("two scrambles in a row are different", async ({ page }) => {

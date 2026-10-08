@@ -54,6 +54,12 @@ Hand-controlled cube demos usually do one thing: a pinch or a swipe turns a face
 </tr>
 </table>
 
+### A fair attempt
+
+A scramble is the start of the attempt, and it stays that way. **Undo** takes back your own turns one at a time and stops at the scramble; **Reset** drops them all and returns to the same scramble with the clock at zero. Neither can walk back through the scramble to a solved cube. That is what **Solve for me** is for, and using it (or the guide) marks the attempt "with help".
+
+The arrow beside Scramble sets up a scramble **of your own**: type or paste it (`R U2 F' L D2`), or tap it in with the on-screen buttons, to practise one position as often as you like. A scramble you chose does not count toward your best time.
+
 ### The signs
 
 Four fingers, read as on or off. Counting from the index finger picks **R, U, F**; counting from the little finger picks **L, D, B**.

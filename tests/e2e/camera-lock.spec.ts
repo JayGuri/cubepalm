@@ -12,12 +12,13 @@ async function viewChangesAfterCameraInput(page: Page) {
   const canvas = page.locator('canvas')
   const before = await canvas.screenshot()
   const box = (await canvas.boundingBox())!
-  const x = box.x + box.width * 0.1
+  // Empty space on the right: the left edge holds the tips panel.
+  const x = box.x + box.width * 0.9
   const y = box.y + box.height * 0.5
   await page.mouse.move(x, y)
   await page.mouse.wheel(0, -400)
   await page.mouse.down({ button: 'right' })
-  await page.mouse.move(x + 150, y + 40, { steps: 10 })
+  await page.mouse.move(x - 150, y + 40, { steps: 10 })
   await page.mouse.up({ button: 'right' })
   await page.waitForTimeout(400)
   const after = await canvas.screenshot()

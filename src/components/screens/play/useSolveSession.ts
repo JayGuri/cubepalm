@@ -45,6 +45,7 @@ export function formatTime(ms: number): string {
 export function useSolveSession(puzzleId: string) {
   const [scrambleLength, setScrambleLength] = useState<number | null>(null)
   const [scrambleText, setScrambleText] = useState('')
+  const [ranked, setRanked] = useState(true)
   const [moveCount, setMoveCount] = useState(0)
   const [assisted, setAssisted] = useState(false)
   const [timer, setTimer] = useState<{ start: number | null; end: number | null }>({ start: null, end: null })
@@ -52,11 +53,16 @@ export function useSolveSession(puzzleId: string) {
   const [best, setBest] = useState<BestResult | null>(() => loadBest(puzzleId))
   const [newBest, setNewBest] = useState(false)
   // The keyboard and sign handlers are created once, so they read this ref.
-  const sessionRef = useRef({ scrambled: false, start: null as number | null, end: null as number | null, moves: 0, assisted: false })
+  const sessionRef = useRef({ scrambled: false, ranked: true, start: null as number | null, end: null as number | null, moves: 0, assisted: false })
 
-  const startSession = (scrambleMoves: number | null, text = '') => {
+  /**
+   * `ranked`: the attempt can set a best time. Only a random scramble is
+   * ranked; a scramble the player chose (say, one turn from solved) is practice.
+   */
+  const startSession = (scrambleMoves: number | null, text = '', ranked = true) => {
     setScrambleText(text)
-    sessionRef.current = { scrambled: scrambleMoves !== null, start: null, end: null, moves: 0, assisted: false }
+    setRanked(ranked)
+    sessionRef.current = { scrambled: scrambleMoves !== null, ranked, start: null, end: null, moves: 0, assisted: false }
     setScrambleLength(scrambleMoves)
     setMoveCount(0)
     setAssisted(false)
@@ -92,7 +98,7 @@ export function useSolveSession(puzzleId: string) {
     if (!usePuzzleStore.getState().isSolved()) return
     session.end = Date.now()
     setTimer({ start: session.start, end: session.end })
-    if (!session.assisted) {
+    if (!session.assisted && session.ranked) {
       const result = { timeMs: session.end - session.start, moves: session.moves }
       const previous = loadBest(puzzleId)
       const merged = {
@@ -113,5 +119,5 @@ export function useSolveSession(puzzleId: string) {
   }, [running])
   const elapsed = timer.start === null ? 0 : Math.max(0, (timer.end ?? clock) - timer.start)
 
-  return { scrambleLength, scrambleText, moveCount, assisted, timer, best, newBest, elapsed, startSession, countMove, markAssisted, checkFinish }
+  return { scrambleLength, scrambleText, ranked, moveCount, assisted, timer, best, newBest, elapsed, startSession, countMove, markAssisted, checkFinish }
 }

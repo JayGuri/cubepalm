@@ -33,14 +33,98 @@ test('dragging a cube face turns it, and Reset restores the solved state', async
   await expect(page.getByTestId('move-count')).toHaveText('0 moves')
 })
 
-test('scramble unsolves and undo walks back one move', async ({ page }) => {
+test('Undo takes back your turns but stops at the scramble; Reset returns to the scramble', async ({ page }) => {
+  test.setTimeout(120_000)
   await page.goto('/play/cube3')
-  await page.getByRole('button', { name: 'Scramble', exact: true }).click()
-  await expect(page.getByTestId('solved-status')).toHaveText('Scrambled')
+  await expect(page.getByTestId('app')).toHaveAttribute('data-solver-ready', 'true', { timeout: 30_000 })
+  const undo = page.getByRole('button', { name: 'Undo', exact: true })
+  const reset = page.getByRole('button', { name: 'Reset', exact: true })
+  const canvas = page.getByTestId('puzzle-canvas')
 
-  const before = await page.getByTestId('move-count').textContent()
-  await page.getByRole('button', { name: /undo/i }).click()
-  await expect(page.getByTestId('move-count')).not.toHaveText(before!)
+  await page.getByRole('button', { name: 'Scramble', exact: true }).click()
+  await expect(page.getByRole('button', { name: /solve for me/i })).toBeEnabled({ timeout: 60_000 })
+  await expect(page.getByTestId('solved-status')).toHaveText('Scrambled')
+  // Fresh from the scramble there is nothing of yours to take back.
+  await expect(undo).toBeDisabled()
+  await expect(reset).toBeDisabled()
+  await page.waitForTimeout(400)
+  const scrambled = await canvas.screenshot()
+
+  // Two turns, two undos: back at the scramble, and no further.
+  await page.keyboard.press('r')
+  await page.keyboard.press('u')
+  await expect(page.getByTestId('move-count')).toHaveText('2 moves')
+  await undo.click()
+  await undo.click()
+  await expect(undo).toBeDisabled()
+  await expect(page.getByTestId('solved-status')).toHaveText('Scrambled')
+  await page.waitForTimeout(600)
+  expect((await canvas.screenshot()).equals(scrambled)).toBe(true)
+
+  // Reset drops every turn at once and lands on the same scrambled cube.
+  for (const key of ['f', 'l', 'd']) await page.keyboard.press(key)
+  await expect(reset).toBeEnabled()
+  await reset.click()
+  await expect(page.getByTestId('move-count')).toHaveText('0 moves')
+  await expect(page.getByTestId('solved-status')).toHaveText('Scrambled')
+  await expect(reset).toBeDisabled()
+  await page.waitForTimeout(600)
+  expect((await canvas.screenshot()).equals(scrambled)).toBe(true)
+})
+
+test('a scramble of your own: typed, or tapped in, then practised like any other', async ({ page }) => {
+  test.setTimeout(120_000)
+  await page.goto('/play/cube3')
+  await expect(page.getByTestId('app')).toHaveAttribute('data-solver-ready', 'true', { timeout: 30_000 })
+  const dialog = page.getByTestId('scramble-dialog')
+
+  // Typed. Letters typed here are text, not turns of the cube behind the dialog.
+  await page.getByTestId('custom-scramble').click()
+  await expect(dialog).toBeVisible()
+  await page.getByTestId('scramble-input').fill('R U x')
+  await expect(page.getByTestId('scramble-status')).toContainText('"x" is not a turn')
+  await expect(page.getByTestId('scramble-use')).toBeDisabled()
+  await page.getByTestId('scramble-input').fill('')
+  await page.getByTestId('scramble-input').pressSequentially("R U F'")
+  await expect(page.getByTestId('scramble-status')).toHaveText('3 turns.')
+  await page.getByTestId('scramble-use').click()
+  await expect(dialog).toHaveCount(0)
+  await expect(page.getByTestId('solved-status')).toHaveText('Scrambled')
+  await expect(page.getByTestId('scramble-length')).toHaveText('Scramble: 3')
+  await expect(page.getByTestId('move-count')).toHaveText('0 moves')
+  // It is the start of the attempt, like any scramble: nothing to undo yet.
+  await expect(page.getByRole('button', { name: 'Undo', exact: true })).toBeDisabled()
+  // Solving it by hand: undo F' with F, then U', then R'.
+  await page.keyboard.press('f')
+  await page.keyboard.press('Shift+U')
+  await page.keyboard.press('Shift+R')
+  await expect(page.getByTestId('solved-status')).toHaveText('Solved')
+  await expect(page.getByTestId('solve-summary')).toHaveText('your own scramble')
+
+  // Tapped in with the on-screen buttons, starting from what is there.
+  await page.getByTestId('custom-scramble').click()
+  await expect(page.getByTestId('scramble-input')).toHaveValue("R U F'")
+  await page.getByRole('button', { name: 'Clear', exact: true }).click()
+  const keys = page.getByTestId('scramble-keys')
+  await keys.getByRole('button', { name: 'L', exact: true }).click()
+  await keys.getByRole('button', { name: 'D2', exact: true }).click()
+  await keys.getByRole('button', { name: 'B′', exact: true }).click()
+  await keys.getByRole('button', { name: 'R', exact: true }).click()
+  await page.getByRole('button', { name: 'Remove last' }).click()
+  await expect(page.getByTestId('scramble-input')).toHaveValue("L D2 B'")
+  await page.getByTestId('scramble-input').press('Enter')
+  await expect(page.getByTestId('scramble-length')).toHaveText('Scramble: 4')
+
+  // Escape leaves things as they were; an empty scramble is a solved cube.
+  await page.getByTestId('custom-scramble').click()
+  await page.keyboard.press('Escape')
+  await expect(dialog).toHaveCount(0)
+  await expect(page.getByTestId('scramble-length')).toHaveText('Scramble: 4')
+  await page.getByTestId('custom-scramble').click()
+  await page.getByRole('button', { name: 'Clear', exact: true }).click()
+  await page.getByTestId('scramble-use').click()
+  await expect(page.getByTestId('solved-status')).toHaveText('Solved')
+  await expect(page.getByTestId('scramble-length')).toHaveCount(0)
 })
 
 test('Scramble then Solve returns the cube to solved', async ({ page }) => {

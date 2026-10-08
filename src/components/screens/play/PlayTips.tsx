@@ -51,6 +51,10 @@ export function MouseTips({ onClose, mirror }: { onClose: () => void; mirror: bo
         Press <b className="text-[#ECEAE4]">Scramble</b> and solve it yourself. Stuck?{' '}
         <b className="text-[#F5B83D]">Guide me</b> shows the next move.
       </p>
+      <p className="mt-2 max-sm:hidden">
+        <b className="text-[#ECEAE4]">Undo</b> takes back your own turns and <b className="text-[#ECEAE4]">Reset</b> returns to the
+        scramble you were given; neither solves it for you. The arrow beside Scramble sets up one you choose.
+      </p>
     </div>
   )
 }

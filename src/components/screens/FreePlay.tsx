@@ -9,6 +9,7 @@ import { SolutionPlayer, type PlaybackSpeed } from '../SolutionPlayer'
 import { BUTTON } from './play/buttonStyles'
 import { CameraPanel } from './play/CameraPanel'
 import { MovePad } from './play/MovePad'
+import { ScrambleDialog } from './play/ScrambleDialog'
 import { PlayActions } from './play/PlayActions'
 import { SolvedBurst } from './play/SolvedBurst'
 import { MouseTips, TipsButton } from './play/PlayTips'
@@ -57,7 +58,8 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
   const lesson = lessonId ? lessonById(lessonId) : undefined
   const puzzleId = lesson ? 'cube3' : routePuzzleId
   const { plugin, state, moveHistory, status, error } = usePuzzleStore()
-  const { load, applyMove, reset, undo, isSolved } = usePuzzleStore()
+  const { load, applyMove, reset, undo, isSolved, markStart, resetToStart } = usePuzzleStore()
+  const startLength = usePuzzleStore((s) => s.startLength)
   const defaultInputMode = useSettingsStore((s) => s.defaultInputMode)
   const colorblindPalette = useSettingsStore((s) => s.colorblindPalette)
   const swapHands = useSettingsStore((s) => s.swapHands)
@@ -141,7 +143,7 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
   const [queueError, setQueueError] = useState<string | null>(null)
 
   // --- Counters ------------------------------------------------------------
-  const { scrambleLength, scrambleText, moveCount, assisted, timer, best, newBest, elapsed, startSession, countMove, markAssisted, checkFinish } =
+  const { scrambleLength, scrambleText, ranked, moveCount, assisted, timer, best, newBest, elapsed, startSession, countMove, markAssisted, checkFinish } =
     useSolveSession(puzzleId)
 
   // --- Solution playback ----------------------------------------------------
@@ -223,6 +225,8 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
     reset()
     const c = lesson.cases[i]
     if (c) for (const m of movesFromAlg(new Alg(c.setup))) applyMove(m)
+    // The practice position is where the lesson starts: Undo stops here.
+    markStart()
     setCaseIndex(i)
   }
 
@@ -411,7 +415,11 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
       if (gen !== queueGenRef.current) return // the cube was replaced while the scramble was being drawn up
       startSession(quarterTurns(moves), moves.map((m) => m.alg.toString()).join(' '))
       await enqueueMoves(moves)
-      if (gen === queueGenRef.current) beginSearch()
+      if (gen !== queueGenRef.current) return
+      // The scrambled cube is where this attempt starts. Undo and Reset go back
+      // to it and no further; only solving it gets you a solved cube.
+      markStart()
+      beginSearch()
     } catch (e) {
       setQueueError((e as Error).message)
     } finally {
@@ -421,15 +429,47 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
     // themselves by default, and opts in with "Guide me" if they want help.
   }
 
+  // Back to where the attempt started: the scrambled cube if there is one (the
+  // counters and clock start over with it), the solved cube if not. It never
+  // solves a scramble; that is what "Solve for me" is for.
   const handleReset = () => {
     stopGuide()
     closeSolution()
     // Drop turns still waiting to animate, or they would land on the reset cube.
     flushQueue()
-    reset()
-    startSession(null)
+    resetToStart()
     forgetSearch()
+    if (scrambleLength === null) {
+      startSession(null)
+      return
+    }
+    startSession(scrambleLength, scrambleText, ranked)
+    beginSearch()
   }
+
+  // A scramble of the player's choosing, typed or tapped in: set up at once (no
+  // dealing animation -- they asked for a position, not a show) and practised
+  // like any other, except that it cannot set a best time. An empty scramble is
+  // a solved cube.
+  const applyCustomScramble = (notation: string[]) => {
+    if (!plugin) return
+    stopGuide()
+    closeSolution()
+    flushQueue()
+    reset()
+    forgetSearch()
+    setQueueError(null)
+    const moves = notation.map((n) => ({ alg: new Alg(n), snapAngleDeg: plugin.snapAngleDeg }))
+    for (const m of moves) applyMove(m)
+    markStart()
+    if (moves.length === 0) {
+      startSession(null)
+      return
+    }
+    startSession(quarterTurns(moves), notation.join(' '), false)
+    beginSearch()
+  }
+  const [scrambleDialogOpen, setScrambleDialogOpen] = useState(false)
 
   const handleUndo = () => {
     closeSolution()
@@ -496,6 +536,8 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
     if (status !== 'ready' || !plugin) return
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey) return
+      // Typing in a field (the scramble box, say) is typing, not turning the cube.
+      if (e.target instanceof HTMLElement && e.target.closest('input, textarea, select, dialog')) return
       if (e.code === 'Space' && !(e.target instanceof HTMLButtonElement)) {
         e.preventDefault()
         setCameraLocked((v) => !v)
@@ -702,7 +744,7 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
 
           {lesson ? (
             <footer className="flex shrink-0 flex-wrap items-center gap-2 border-t border-white/[0.07] px-4 py-3 sm:gap-3 sm:px-6">
-              <button type="button" className={BUTTON} onClick={handleUndo} disabled={busy || moveHistory.length === 0}>
+              <button type="button" className={BUTTON} onClick={handleUndo} disabled={busy || moveHistory.length <= startLength}>
                 Undo
               </button>
               <button type="button" className={BUTTON} onClick={() => setupCase(caseIndex)} disabled={busy}>
@@ -729,7 +771,10 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
             solved={solved}
             guideActive={guideStatus !== 'off'}
             solveActive={solveStatus !== 'off'}
-            canUndo={moveHistory.length > 0}
+            canUndo={moveHistory.length > startLength}
+            canReset={moveHistory.length > startLength}
+            ranked={ranked}
+            onCustom={() => setScrambleDialogOpen(true)}
             scrambleLength={scrambleLength}
             scrambleText={scrambleText}
             moveCount={moveCount}
@@ -744,6 +789,18 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
             onGuide={() => void startGuide()}
             onSolve={() => void handleSolve()}
           />
+          )}
+
+          {scrambleDialogOpen && (
+            <ScrambleDialog
+              initial={scrambleText}
+              onRandom={() => plugin.scramble().then((moves) => moves.map((m) => m.alg.toString()))}
+              onUse={(notation) => {
+                setScrambleDialogOpen(false)
+                applyCustomScramble(notation)
+              }}
+              onClose={() => setScrambleDialogOpen(false)}
+            />
           )}
 
           {(error || queueError) && <p className="px-6 pb-3 text-sm text-[#EF4444]">{error || queueError}</p>}

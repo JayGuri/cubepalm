@@ -82,6 +82,11 @@ test('Stop, Guide me, and Reset', async ({ page }) => {
   await expect(page.getByTestId('guide-panel')).toHaveCount(0)
   await page.getByTestId('guide-me').click()
   await expect(page.getByTestId('guide-step')).toBeVisible({ timeout: 30_000 })
+  // Take the guide's first step, then Reset: back to the scramble, guide closed.
+  await page.keyboard.press(stepKey((await page.getByTestId('guide-step').textContent())!))
+  await expect(page.getByTestId('move-count')).toHaveText('1 moves')
   await page.getByRole('button', { name: /reset/i }).click()
   await expect(page.getByTestId('guide-panel')).toHaveCount(0)
+  await expect(page.getByTestId('move-count')).toHaveText('0 moves')
+  await expect(page.getByTestId('solved-status')).toHaveText('Scrambled')
 })
