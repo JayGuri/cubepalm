@@ -3,14 +3,20 @@ import { create } from 'zustand'
 // App-wide settings, persisted in localStorage.
 
 export type InputModePreference = 'mouse' | 'hands'
+export type TurnSpeed = 'slow' | 'normal' | 'fast'
+
+/** How long one quarter turn takes to draw, in milliseconds. */
+export const TURN_MS: Record<TurnSpeed, number> = { slow: 340, normal: 220, fast: 130 }
 
 export interface SettingsState {
   colorblindPalette: boolean
   defaultInputMode: InputModePreference
   swapHands: boolean
+  turnSpeed: TurnSpeed
   setColorblindPalette: (on: boolean) => void
   setDefaultInputMode: (mode: InputModePreference) => void
   setSwapHands: (on: boolean) => void
+  setTurnSpeed: (speed: TurnSpeed) => void
 }
 
 const STORAGE_KEY = 'cubepalm.settings.v1'
@@ -19,12 +25,14 @@ interface StoredSettings {
   colorblindPalette: boolean
   defaultInputMode: InputModePreference
   swapHands: boolean
+  turnSpeed: TurnSpeed
 }
 
 const DEFAULTS: StoredSettings = {
   colorblindPalette: false,
   defaultInputMode: 'mouse',
   swapHands: false,
+  turnSpeed: 'normal',
 }
 
 /** Keeps each stored value only if it is one the app understands; anything else falls back to its default. */
@@ -34,6 +42,7 @@ export function sanitize(stored: unknown): StoredSettings {
     colorblindPalette: typeof s.colorblindPalette === 'boolean' ? s.colorblindPalette : DEFAULTS.colorblindPalette,
     defaultInputMode: s.defaultInputMode === 'mouse' || s.defaultInputMode === 'hands' ? s.defaultInputMode : DEFAULTS.defaultInputMode,
     swapHands: typeof s.swapHands === 'boolean' ? s.swapHands : DEFAULTS.swapHands,
+    turnSpeed: s.turnSpeed === 'slow' || s.turnSpeed === 'normal' || s.turnSpeed === 'fast' ? s.turnSpeed : DEFAULTS.turnSpeed,
   }
 }
 
@@ -49,7 +58,7 @@ function load(): StoredSettings {
 
 function persist(settings: StoredSettings): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitize(settings)))
   } catch {
     // A full or blocked storage quota must not break the app.
   }
@@ -70,5 +79,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setSwapHands: (on) => {
     persist({ ...get(), swapHands: on })
     set({ swapHands: on })
+  },
+  setTurnSpeed: (speed) => {
+    persist({ ...get(), turnSpeed: speed })
+    set({ turnSpeed: speed })
   },
 }))

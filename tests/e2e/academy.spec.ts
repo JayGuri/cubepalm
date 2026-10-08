@@ -67,7 +67,7 @@ test('Solve for me plays the solution back with controls, on both cubes', async 
   for (const puzzle of ['cube3', 'mirror']) {
     await page.goto(`/play/${puzzle}`)
     await expect(page.getByTestId('app')).toHaveAttribute('data-solver-ready', 'true', { timeout: 45_000 })
-    await page.getByRole('button', { name: /scramble/i }).click()
+    await page.getByRole('button', { name: 'Scramble', exact: true }).click()
     await expect(page.getByTestId('solved-status')).toHaveText('Scrambled', { timeout: 30_000 })
     await expect(page.getByRole('button', { name: /solve for me/i })).toBeEnabled({ timeout: 30_000 })
     await page.getByRole('button', { name: /solve for me/i }).click()
@@ -84,7 +84,7 @@ test('the solution can be paused, stepped and reversed', async ({ page }) => {
   test.setTimeout(90_000)
   await page.goto('/play/cube3')
   await expect(page.getByTestId('app')).toHaveAttribute('data-solver-ready', 'true', { timeout: 45_000 })
-  await page.getByRole('button', { name: /scramble/i }).click()
+  await page.getByRole('button', { name: 'Scramble', exact: true }).click()
   await expect(page.getByRole('button', { name: /solve for me/i })).toBeEnabled({ timeout: 30_000 })
   await page.getByRole('button', { name: /solve for me/i }).click()
   await expect(page.getByTestId('solution-play')).toBeVisible({ timeout: 15_000 })
@@ -145,7 +145,7 @@ test("after a scramble the move counter starts at 0, separate from the scramble,
   await page.goto("/play/cube3")
   await expect(page.getByTestId("app")).toHaveAttribute("data-solver-ready", "true", { timeout: 45_000 })
   await expect(page.getByTestId("scramble-length")).toHaveCount(0)
-  await page.getByRole("button", { name: /scramble/i }).click()
+  await page.getByRole("button", { name: "Scramble", exact: true }).click()
   await expect(page.getByTestId("guide-me")).toBeEnabled({ timeout: 40_000 })
   await expect(page.getByTestId("scramble-length")).toHaveText(/Scramble: \d+/)
   await expect(page.getByTestId("move-count")).toHaveText("0 moves")
@@ -165,7 +165,7 @@ test("two scrambles in a row are different", async ({ page }) => {
   await expect(page.getByTestId("app")).toHaveAttribute("data-solver-ready", "true", { timeout: 45_000 })
   const recent = async () => JSON.parse((await page.evaluate(() => localStorage.getItem("cubepalm.recentScrambles.v1"))) ?? "[]") as string[]
   for (let i = 0; i < 2; i++) {
-    await page.getByRole("button", { name: /scramble/i }).click()
+    await page.getByRole("button", { name: "Scramble", exact: true }).click()
     await expect(page.getByTestId("guide-me")).toBeEnabled({ timeout: 40_000 })
   }
   const list = await recent()
@@ -198,7 +198,7 @@ test("the guide's route is never longer than simply undoing the scramble, in the
   test.setTimeout(120_000)
   await page.goto("/play/cube3")
   await expect(page.getByTestId("app")).toHaveAttribute("data-solver-ready", "true", { timeout: 45_000 })
-  await page.getByRole("button", { name: /scramble/i }).click()
+  await page.getByRole("button", { name: "Scramble", exact: true }).click()
   await expect(page.getByTestId("guide-me")).toBeEnabled({ timeout: 40_000 })
   const scrambleSteps = Number((await page.getByTestId("scramble-length").textContent())!.match(/\d+/)![0])
   await page.getByTestId("guide-me").click()

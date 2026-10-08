@@ -29,7 +29,7 @@ test('Scramble then Solve for me returns the Mirror Cube to solved', async ({ pa
   test.setTimeout(240_000)
   await page.goto('/play/mirror')
   await expect(page.getByTestId('app')).toHaveAttribute('data-solver-ready', 'true', { timeout: 30_000 })
-  await page.getByRole('button', { name: /scramble/i }).click()
+  await page.getByRole('button', { name: 'Scramble', exact: true }).click()
   await expect(page.getByTestId('solved-status')).toHaveText('Scrambled', { timeout: 30_000 })
   await expect(page.getByRole('button', { name: /solve for me/i })).toBeEnabled({ timeout: 90_000 })
   await page.getByRole('button', { name: /solve for me/i }).click()

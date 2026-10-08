@@ -20,7 +20,7 @@ async function where(page: Page) {
 
 // Scramble, wait for it to land, then opt in to the guide.
 async function scrambleThenGuide(page: Page) {
-  await page.getByRole('button', { name: /scramble/i }).click()
+  await page.getByRole('button', { name: 'Scramble', exact: true }).click()
   await expect(page.getByTestId('guide-me')).toBeEnabled({ timeout: 30_000 })
   await page.getByTestId('guide-me').click()
   await expect(page.getByTestId('guide-step')).toBeVisible({ timeout: 30_000 })
@@ -68,7 +68,7 @@ test('a wrong move re-solves from where the cube really is, and the guide still 
 
 test('Scramble alone does not open the guide -- you solve it yourself by default', async ({ page }) => {
   await open(page)
-  await page.getByRole('button', { name: /scramble/i }).click()
+  await page.getByRole('button', { name: 'Scramble', exact: true }).click()
   await expect(page.getByTestId('solved-status')).toHaveText('Scrambled', { timeout: 30_000 })
   await expect(page.getByTestId('guide-me')).toBeEnabled({ timeout: 30_000 })
   await page.waitForTimeout(1500)

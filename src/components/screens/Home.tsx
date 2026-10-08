@@ -115,12 +115,12 @@ export function Home() {
             <div aria-hidden className="absolute bottom-8 left-[25%] h-7 w-48 -translate-x-1/2 rounded-[50%] bg-black/60 blur-xl sm:bottom-10" />
             <div aria-hidden className="absolute bottom-8 left-[75%] h-7 w-48 -translate-x-1/2 rounded-[50%] bg-black/60 blur-xl sm:bottom-10" />
             <div className="grid flex-1 place-items-center">
-              <div className="scale-[0.6] sm:scale-[1.0]">
+              <div className="scale-[0.6] sm:scale-[0.95] md:scale-[0.7] lg:scale-[0.85] xl:scale-100">
                 <CssCube cubie={56} autoplay tumble followPointer />
               </div>
             </div>
             <div className="grid flex-1 place-items-center">
-              <div className="scale-[0.6] sm:scale-[1.0]">
+              <div className="scale-[0.6] sm:scale-[0.95] md:scale-[0.7] lg:scale-[0.85] xl:scale-100">
                 <CssCube variant="mirror" cubie={56} autoplay tumble followPointer />
               </div>
             </div>

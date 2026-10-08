@@ -184,6 +184,7 @@ export function GuidePanel({
   showHands,
   optimal = false,
   refining = false,
+  touch = false,
 }: {
   guide: GuideState | null
   status: 'solving' | 'following' | 'done'
@@ -193,6 +194,8 @@ export function GuidePanel({
   optimal?: boolean
   /** A deeper search for a shorter route is running. */
   refining?: boolean
+  /** No keyboard here: point at the on-screen turn buttons instead of a key. */
+  touch?: boolean
 }) {
   const step = guide ? guide.steps[guide.index] : null
   const sign = step ? signForNotation(step) : null
@@ -225,6 +228,8 @@ export function GuidePanel({
                 <span data-testid="guide-sign">
                   <b style={{ color: HAND_COLOR[sign.hand] }}>{sign.hand} hand</b>, {poseWords(sign.layer)}
                 </span>
+              ) : touch ? (
+                <span data-testid="guide-tap">Tap the gold button</span>
               ) : (
                 <>
                   Key{' '}

@@ -44,6 +44,7 @@ export function formatTime(ms: number): string {
  */
 export function useSolveSession(puzzleId: string) {
   const [scrambleLength, setScrambleLength] = useState<number | null>(null)
+  const [scrambleText, setScrambleText] = useState('')
   const [moveCount, setMoveCount] = useState(0)
   const [assisted, setAssisted] = useState(false)
   const [timer, setTimer] = useState<{ start: number | null; end: number | null }>({ start: null, end: null })
@@ -53,7 +54,8 @@ export function useSolveSession(puzzleId: string) {
   // The keyboard and sign handlers are created once, so they read this ref.
   const sessionRef = useRef({ scrambled: false, start: null as number | null, end: null as number | null, moves: 0, assisted: false })
 
-  const startSession = (scrambleMoves: number | null) => {
+  const startSession = (scrambleMoves: number | null, text = '') => {
+    setScrambleText(text)
     sessionRef.current = { scrambled: scrambleMoves !== null, start: null, end: null, moves: 0, assisted: false }
     setScrambleLength(scrambleMoves)
     setMoveCount(0)
@@ -111,5 +113,5 @@ export function useSolveSession(puzzleId: string) {
   }, [running])
   const elapsed = timer.start === null ? 0 : Math.max(0, (timer.end ?? clock) - timer.start)
 
-  return { scrambleLength, moveCount, assisted, timer, best, newBest, elapsed, startSession, countMove, markAssisted, checkFinish }
+  return { scrambleLength, scrambleText, moveCount, assisted, timer, best, newBest, elapsed, startSession, countMove, markAssisted, checkFinish }
 }

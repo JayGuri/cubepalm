@@ -63,6 +63,10 @@ html {
 .cc-tumble {
   animation: cc-tumble 22s linear infinite;
 }
+/* Scrolled out of view: stop spinning. */
+.cc-stage[data-paused='1'] .cc-tumble {
+  animation-play-state: paused;
+}
 .cc-cubie {
   position: absolute;
   left: calc(var(--c) / -2);
@@ -110,4 +114,15 @@ html {
   0% { transform: rotateX(-26deg) rotateY(-34deg) translateY(0); }
   50% { transform: rotateX(-32deg) rotateY(146deg) translateY(-10px); }
   100% { transform: rotateX(-26deg) rotateY(326deg) translateY(0); }
+}
+
+/* A solved cube: stickers scatter from the middle of the stage and fade. */
+.solved-shard {
+  opacity: 0;
+  animation: solved-shard 1100ms cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+}
+@keyframes solved-shard {
+  0% { opacity: 0; transform: translate(0, 0) rotate(0deg) scale(0.4); }
+  12% { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--x), calc(var(--y) + 90px)) rotate(var(--spin)) scale(1); }
 }

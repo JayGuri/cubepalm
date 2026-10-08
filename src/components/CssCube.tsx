@@ -104,7 +104,10 @@ export function CssCube({ cubie = 66, autoplay = false, tumble = false, followPo
   const queue = useRef<Promise<void>>(Promise.resolve())
   const alive = useRef(true)
   const raf = useRef(0)
-  const [tilt, setTilt] = useState({ x: 0, y: 0 })
+  const stageRef = useRef<HTMLDivElement>(null)
+  const tiltRef = useRef<HTMLDivElement>(null)
+  // Off screen, a cube neither turns nor tumbles: nobody is watching it.
+  const visible = useRef(true)
 
   const draw = (turn?: { axis: number; layer: number; angle: number }) => {
     pieces.current.forEach((p, i) => {
@@ -156,6 +159,9 @@ export function CssCube({ cubie = 66, autoplay = false, tumble = false, followPo
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     let timer = 0
     const wait = (ms: number) => new Promise<void>((r) => (timer = window.setTimeout(r, ms)))
+    const untilVisible = async () => {
+      while (alive.current && !visible.current) await wait(400)
+    }
     if (autoplay && !reduced) {
       void (async () => {
         // Random pauses and speeds, so two cubes on one page never move in step.
@@ -163,9 +169,15 @@ export function CssCube({ cubie = 66, autoplay = false, tumble = false, followPo
         while (alive.current) {
           const scramble = randomScramble()
           const pace = 270
-          for (const m of scramble) if (alive.current) await animate(m, pace)
+          for (const m of scramble) {
+            await untilVisible()
+            if (alive.current) await animate(m, pace)
+          }
           await wait(between(900, 1500))
-          for (const m of [...scramble].reverse()) if (alive.current) await animate(invert(m), pace)
+          for (const m of [...scramble].reverse()) {
+            await untilVisible()
+            if (alive.current) await animate(invert(m), pace)
+          }
           await wait(between(1800, 2800))
         }
       })()
@@ -179,19 +191,43 @@ export function CssCube({ cubie = 66, autoplay = false, tumble = false, followPo
   }, [autoplay])
 
   useEffect(() => {
+    const stage = stageRef.current
+    if (!stage || typeof IntersectionObserver === 'undefined') return
+    const observer = new IntersectionObserver(([entry]) => {
+      visible.current = entry.isIntersecting
+      stage.dataset.paused = entry.isIntersecting ? '0' : '1'
+    })
+    observer.observe(stage)
+    return () => observer.disconnect()
+  }, [])
+
+  // Leaning toward the pointer is written straight to the element, once a
+  // frame at most. As React state it re-rendered all 150-odd elements of the
+  // cube on every mouse movement.
+  useEffect(() => {
     if (!followPointer) return
-    const move = (e: PointerEvent) =>
-      setTilt({ x: (e.clientY / window.innerHeight - 0.5) * -24, y: (e.clientX / window.innerWidth - 0.5) * 30 })
-    window.addEventListener('pointermove', move)
-    return () => window.removeEventListener('pointermove', move)
+    let frame = 0
+    let x = 0
+    let y = 0
+    const move = (e: PointerEvent) => {
+      x = (e.clientY / window.innerHeight - 0.5) * -24
+      y = (e.clientX / window.innerWidth - 0.5) * 30
+      if (frame || !visible.current) return
+      frame = requestAnimationFrame(() => {
+        frame = 0
+        if (tiltRef.current) tiltRef.current.style.transform = `rotateX(${x}deg) rotateY(${y}deg)`
+      })
+    }
+    window.addEventListener('pointermove', move, { passive: true })
+    return () => {
+      window.removeEventListener('pointermove', move)
+      cancelAnimationFrame(frame)
+    }
   }, [followPointer])
 
   return (
-    <div aria-hidden className={`cc-stage ${className}`}>
-      <div
-        className="transition-transform duration-500 ease-out"
-        style={{ transform: `rotateX(${tilt.x}deg) rotateY(${tilt.y}deg)`, transformStyle: 'preserve-3d' }}
-      >
+    <div aria-hidden ref={stageRef} className={`cc-stage ${className}`}>
+      <div ref={tiltRef} className="transition-transform duration-500 ease-out" style={{ transformStyle: 'preserve-3d' }}>
         <div
           className={`cc-cube ${tumble ? 'cc-tumble' : ''}`}
           style={{ ['--hs' as string]: `${cubie / 2}px`, ['--c' as string]: `${cubie}px`, ...(tumble ? tumbleStyle : {}) }}

@@ -8,7 +8,9 @@ import { PuzzleCanvas } from '../PuzzleCanvas'
 import { SolutionPlayer, type PlaybackSpeed } from '../SolutionPlayer'
 import { BUTTON } from './play/buttonStyles'
 import { CameraPanel } from './play/CameraPanel'
+import { MovePad } from './play/MovePad'
 import { PlayActions } from './play/PlayActions'
+import { SolvedBurst } from './play/SolvedBurst'
 import { MouseTips, TipsButton } from './play/PlayTips'
 import { onPhone, useTips } from './play/useTips'
 import { useGuideState } from './play/useGuideState'
@@ -36,7 +38,7 @@ import type { Move, PuzzleId } from '../../core/puzzles/PuzzlePlugin'
 import { usePuzzleStore } from '../../state/puzzleStore'
 import { getSolverError, getSolverStatus, quarterTurns, retrySolver, subscribeSolverStatus } from '../../core/solvers/kociemba'
 import { useAcademyStore } from '../../state/academyStore'
-import { useSettingsStore } from '../../state/settingsStore'
+import { TURN_MS, useSettingsStore } from '../../state/settingsStore'
 
 type InputMode = 'mouse' | 'hands'
 
@@ -59,6 +61,7 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
   const defaultInputMode = useSettingsStore((s) => s.defaultInputMode)
   const colorblindPalette = useSettingsStore((s) => s.colorblindPalette)
   const swapHands = useSettingsStore((s) => s.swapHands)
+  const baseTurnMs = TURN_MS[useSettingsStore((s) => s.turnSpeed)]
   const thresholds = DEFAULT_THRESHOLDS
 
   const [inputMode, setInputMode] = useState<InputMode>(defaultInputMode)
@@ -66,6 +69,8 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
   // other way for a first-time user to discover the vocabulary.
   const [showHandsHelp, setShowHandsHelp] = useState(!lessonId && !onPhone())
   const tips = useTips()
+  // No keyboard to press R U F L D B on: offer the turns as buttons.
+  const [touchScreen] = useState(() => window.matchMedia('(pointer: coarse)').matches)
   // One lock for every input: the header button, Space, or a held fist.
   const [cameraLocked, setCameraLocked] = useState(false)
   const toggleCameraLock = () => setCameraLocked((v) => !v)
@@ -136,7 +141,7 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
   const [queueError, setQueueError] = useState<string | null>(null)
 
   // --- Counters ------------------------------------------------------------
-  const { scrambleLength, moveCount, assisted, timer, best, newBest, elapsed, startSession, countMove, markAssisted, checkFinish } =
+  const { scrambleLength, scrambleText, moveCount, assisted, timer, best, newBest, elapsed, startSession, countMove, markAssisted, checkFinish } =
     useSolveSession(puzzleId)
 
   // --- Solution playback ----------------------------------------------------
@@ -404,7 +409,7 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
       const gen = queueGenRef.current
       const moves = await plugin.scramble()
       if (gen !== queueGenRef.current) return // the cube was replaced while the scramble was being drawn up
-      startSession(quarterTurns(moves))
+      startSession(quarterTurns(moves), moves.map((m) => m.alg.toString()).join(' '))
       await enqueueMoves(moves)
       if (gen === queueGenRef.current) beginSearch()
     } catch (e) {
@@ -540,7 +545,7 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
               onClick={() => setInputMode('mouse')}
               className={`rounded-full px-3.5 py-1 transition ${inputMode === 'mouse' ? 'bg-[#FFD500] font-semibold text-[#16171B]' : 'text-[#9C9AA3] hover:text-[#ECEAE4]'}`}
             >
-              Mouse
+              {touchScreen ? 'Touch' : 'Mouse'}
             </button>
             <button
               type="button"
@@ -597,7 +602,7 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
               aria-hidden
               className="pointer-events-none absolute inset-0 bg-[radial-gradient(42%_46%_at_50%_44%,rgba(76,201,240,0.10),transparent_70%),radial-gradient(30%_30%_at_62%_60%,rgba(255,213,0,0.06),transparent_70%)]"
             />
-            <div aria-hidden className="pointer-events-none absolute left-1/2 top-[78%] h-[7%] w-[38%] max-w-md -translate-x-1/2 rounded-[50%] bg-black/55 blur-2xl" />
+            <div aria-hidden className="pointer-events-none absolute left-1/2 top-[calc(50%+min(33vw,25vh))] h-[6%] w-[min(60vw,26rem)] -translate-x-1/2 rounded-[50%] bg-black/55 blur-2xl" />
             <PuzzleCanvas
               plugin={plugin}
               state={state}
@@ -606,7 +611,7 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
               gestureFeed={inputMode === 'hands' ? cameraFeed : null}
               colorblindPalette={colorblindPalette}
               colorRemap={lesson ? FLIP_COLORS : undefined}
-              turnMs={solveStatus === 'ready' ? Math.round(220 / speed) : undefined}
+              turnMs={solveStatus === 'ready' ? Math.round(baseTurnMs / speed) : baseTurnMs}
               animatingMove={animatingMove}
               onAnimationComplete={handleAnimationComplete}
               cameraLocked={cameraLocked}
@@ -658,12 +663,16 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
 
             {signsActive && heldSigns.length > 0 && <SignsHud signs={heldSigns} />}
 
+            {/* A solve you made, or a lesson you finished: once, and briefly. */}
+            {((timer.end !== null && solved) || lessonDone) && <SolvedBurst key={timer.end ?? 'lesson'} />}
+
             {guideStatus !== 'off' && (
               <GuidePanel
                 guide={guide}
                 status={guideStatus}
                 onStop={stopGuide}
-                showHands={inputMode === 'hands' || Boolean(lesson)}
+                showHands={inputMode === 'hands' || (Boolean(lesson) && !touchScreen)}
+                touch={touchScreen && inputMode === 'mouse'}
                 optimal={guideOptimal}
                 refining={guideRefining}
               />
@@ -686,6 +695,10 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
             )}
           </div>
           </div>
+
+          {touchScreen && inputMode === 'mouse' && (
+            <MovePad disabled={busy} hint={guideStatus === 'following' && guide ? guide.steps[guide.index] : null} onTurn={(notation) => userMove({ alg: new Alg(notation), snapAngleDeg: plugin.snapAngleDeg })} />
+          )}
 
           {lesson ? (
             <footer className="flex shrink-0 flex-wrap items-center gap-2 border-t border-white/[0.07] px-4 py-3 sm:gap-3 sm:px-6">
@@ -718,6 +731,7 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
             solveActive={solveStatus !== 'off'}
             canUndo={moveHistory.length > 0}
             scrambleLength={scrambleLength}
+            scrambleText={scrambleText}
             moveCount={moveCount}
             timer={timer}
             elapsed={elapsed}

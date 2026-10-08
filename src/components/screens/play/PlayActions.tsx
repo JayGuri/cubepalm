@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { BUTTON, PRIMARY } from './buttonStyles'
 import { formatTime, type BestResult } from './useSolveSession'
 
@@ -9,6 +10,7 @@ export function PlayActions({
   solveActive,
   canUndo,
   scrambleLength,
+  scrambleText,
   moveCount,
   timer,
   elapsed,
@@ -29,6 +31,8 @@ export function PlayActions({
   solveActive: boolean
   canUndo: boolean
   scrambleLength: number | null
+  /** The scramble in notation, e.g. "R U2 F'"; copied when its length is clicked. */
+  scrambleText: string
   moveCount: number
   timer: { start: number | null; end: number | null }
   elapsed: number
@@ -41,6 +45,16 @@ export function PlayActions({
   onGuide: () => void
   onSolve: () => void
 }) {
+  const [copied, setCopied] = useState(false)
+  const copyScramble = () => {
+    void navigator.clipboard
+      ?.writeText(scrambleText)
+      .then(() => {
+        setCopied(true)
+        window.setTimeout(() => setCopied(false), 1400)
+      })
+      .catch(() => undefined)
+  }
   return (
     <footer className="flex shrink-0 flex-wrap items-center gap-1.5 border-t border-white/[0.07] px-3 py-2.5 sm:gap-3 sm:px-6 sm:py-3">
       <button type="button" className={PRIMARY} onClick={onScramble} disabled={busy}>
@@ -61,13 +75,15 @@ export function PlayActions({
           {solved ? 'Solved' : 'Scrambled'}
         </span>
         {scrambleLength !== null && (
-          <span
-            className="text-[#9C9AA3]"
+          <button
+            type="button"
+            className="text-[#9C9AA3] underline decoration-white/20 decoration-dotted underline-offset-4 hover:text-[#ECEAE4]"
             data-testid="scramble-length"
-            title="Turns used to scramble the cube, counted the same way as your moves: a half turn counts two"
+            title={`${scrambleText}\n\nClick to copy. Turns are counted the same way as your moves: a half turn counts two.`}
+            onClick={copyScramble}
           >
-            Scramble: {scrambleLength}
-          </span>
+            {copied ? 'Scramble copied' : `Scramble: ${scrambleLength}`}
+          </button>
         )}
         <span className="tabular-nums text-[#ECEAE4]" data-testid="move-count" title="Turns since the scramble; a half turn counts two">
           {moveCount} moves
@@ -93,11 +109,13 @@ export function PlayActions({
           onClick={onGuide}
           disabled={busy}
         >
-          Guide me
+          <span className="sm:hidden">Guide</span>
+          <span className="max-sm:hidden">Guide me</span>
         </button>
       )}
       <button type="button" className={BUTTON} title="Plays the whole solution for you" onClick={onSolve} disabled={busy || solved || solveActive}>
-        Solve for me
+        <span className="sm:hidden">Solve</span>
+        <span className="max-sm:hidden">Solve for me</span>
       </button>
     </footer>
   )

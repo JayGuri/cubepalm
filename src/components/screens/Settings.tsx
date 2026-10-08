@@ -1,4 +1,6 @@
-import { useSettingsStore } from '../../state/settingsStore'
+import { useState } from 'react'
+import { useAcademyStore } from '../../state/academyStore'
+import { useSettingsStore, type TurnSpeed } from '../../state/settingsStore'
 import { SiteNav } from '../SiteNav'
 
 const TOGGLE = (on: boolean) =>
@@ -8,6 +10,8 @@ const KNOB = (on: boolean) =>
 
 export function Settings() {
   const settings = useSettingsStore()
+  const resetAcademy = useAcademyStore((s) => s.reset)
+  const [cleared, setCleared] = useState(false)
 
   return (
     <main className="min-h-dvh bg-[#16171B] px-6 py-12 text-[#ECEAE4]">
@@ -63,6 +67,42 @@ export function Settings() {
             </button>
           </Row>
 
+          <Row label="Turn speed" description="How fast a layer turns on screen. Fast suits a quick solver; slow is easier to follow.">
+            <select
+              data-testid="turn-speed"
+              aria-label="Turn speed"
+              value={settings.turnSpeed}
+              onChange={(e) => settings.setTurnSpeed(e.target.value as TurnSpeed)}
+              className="rounded-lg border border-white/10 bg-[#202227] px-3 py-1.5 text-sm"
+            >
+              <option value="slow">Slow</option>
+              <option value="normal">Normal</option>
+              <option value="fast">Fast</option>
+            </select>
+          </Row>
+
+          <Row
+            label="Saved on this device"
+            description="Your finished lessons and best solve times. Nothing is stored anywhere else."
+          >
+            <button
+              type="button"
+              data-testid="clear-saved"
+              className="shrink-0 rounded-full border border-white/15 px-4 py-1.5 text-sm font-medium hover:border-[#E5384F] hover:text-[#FF8A9A]"
+              onClick={() => {
+                if (!window.confirm('Clear your finished lessons and best times on this device? This cannot be undone.')) return
+                resetAcademy()
+                try {
+                  localStorage.removeItem('cubepalm.best.v1')
+                } catch {
+                  // Storage blocked: there was nothing saved to clear.
+                }
+                setCleared(true)
+              }}
+            >
+              {cleared ? 'Cleared' : 'Clear'}
+            </button>
+          </Row>
         </div>
       </div>
     </main>
