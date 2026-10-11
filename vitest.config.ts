@@ -13,7 +13,7 @@ export default defineConfig({
     globals: true,
     // tests/e2e is Playwright's; its *.spec.ts files match vitest's default
     // include glob and blow up under vitest if not excluded here.
-    exclude: ['**/node_modules/**', '**/dist/**', 'tests/e2e/**'],
+    exclude: ['**/node_modules/**', '**/dist/**', 'tests/e2e/**', 'research/**', 'scratchpad/**'],
     testTimeout: 30_000,
   },
 })

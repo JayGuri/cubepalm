@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
+    "research": "vitest run --config vitest.research.config.ts",
     "setup:mediapipe": "node scripts/setup-mediapipe.mjs",
     "postinstall": "node scripts/setup-mediapipe.mjs",
     "predev": "node scripts/setup-mediapipe.mjs",
