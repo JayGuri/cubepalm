@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useAcademyStore } from '../../state/academyStore'
-import { useSettingsStore, type TurnSpeed } from '../../state/settingsStore'
+import { useSettingsStore, type SignReading, type TurnSpeed } from '../../state/settingsStore'
 import { SiteNav } from '../SiteNav'
 
 const TOGGLE = (on: boolean) =>
@@ -65,6 +65,22 @@ export function Settings() {
             >
               <span className={KNOB(settings.swapHands)} />
             </button>
+          </Row>
+
+          <Row
+            label="Sign reading"
+            description="Classic is the original rule. Precise corrects for the camera's picture shape, ignores a relaxed half-open hand, and smooths out jitter; it is new and measured only on a hand model so far."
+          >
+            <select
+              data-testid="sign-reading"
+              aria-label="Sign reading"
+              value={settings.signReading}
+              onChange={(e) => settings.setSignReading(e.target.value as SignReading)}
+              className="rounded-lg border border-white/10 bg-[#202227] px-3 py-1.5 text-sm"
+            >
+              <option value="classic">Classic</option>
+              <option value="precise">Precise (experimental)</option>
+            </select>
           </Row>
 
           <Row label="Turn speed" description="How fast a layer turns on screen. Fast suits a quick solver; slow is easier to follow.">

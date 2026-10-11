@@ -26,12 +26,12 @@ import { moveFromKey } from '../../core/gestures/KeyboardAdapter'
 import {
   activeSigns,
   createSignState,
-  DEFAULT_SIGN_OPTIONS,
   LAYER_SLICE,
   stepSigns,
   type ActiveSign,
 } from '../../core/gestures/signGestures'
 import { createGuide, expandSteps, followMove, invertStep } from '../../core/solvers/solveGuide'
+import { createSmoother, signOptions } from '../../core/gestures/signReading'
 import { createGestureFeed, useHandGestures } from '../../core/gestures/useHandGestures'
 import type { GestureEvent } from '../../core/gestures/GestureRecognizer'
 import type { LandmarkFrame } from '../../core/gestures/landmarks'
@@ -63,6 +63,7 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
   const defaultInputMode = useSettingsStore((s) => s.defaultInputMode)
   const colorblindPalette = useSettingsStore((s) => s.colorblindPalette)
   const swapHands = useSettingsStore((s) => s.swapHands)
+  const signReading = useSettingsStore((s) => s.signReading)
   const baseTurnMs = TURN_MS[useSettingsStore((s) => s.turnSpeed)]
   const thresholds = DEFAULT_THRESHOLDS
 
@@ -98,6 +99,12 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
   // outside React; state is only set when something on screen changes (the ring
   // around a held sign advances in a dozen steps, not twenty-five times a second).
   const [cameraFeed] = useState(createGestureFeed)
+  // Precise reading smooths the landmarks first; the filter remembers the last
+  // frames, so it lives across them and is rebuilt when the setting changes.
+  const smoothing = useRef<ReturnType<typeof createSmoother> | null>(null)
+  useEffect(() => {
+    smoothing.current = signReading === 'precise' ? createSmoother() : null
+  }, [signReading, inputMode])
   const onFrame = (f: LandmarkFrame, events: GestureEvent[]) => {
     const lock = stepFistLock(fistLockRef.current, f, thresholds.fist)
     fistLockRef.current = lock.next
@@ -105,8 +112,8 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
     const hold = Math.round(fistLockProgress(lock.next, f.timestampMs) * 20) / 20
     setLockHoldProgress((prev) => (prev === hold ? prev : hold))
 
-    const opts = { ...DEFAULT_SIGN_OPTIONS, swapHands }
-    const r = stepSigns(signsRef.current, f, opts)
+    const opts = signOptions(signReading, swapHands)
+    const r = stepSigns(signsRef.current, smoothing.current ? smoothing.current(f) : f, opts)
     signsRef.current = r.next
     for (const e of r.events) userMove(e.move)
     const held = activeSigns(r.next, f.timestampMs, opts).map((s) => ({ ...s, progress: Math.round(s.progress * 12) / 12 }))

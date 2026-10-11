@@ -18,6 +18,8 @@ export interface HandFrame {
 }
 
 export interface LandmarkFrame {
+  /** Width over height of the picture the landmarks were found in, when known. */
+  aspect?: number
   hands: HandFrame[]
   timestampMs: number
 }

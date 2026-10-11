@@ -1,7 +1,7 @@
 import { Alg } from 'cubing/alg'
 import type { Move } from '../puzzles/PuzzlePlugin'
-import { distance, handScale } from './landmarkMath'
-import type { Handedness, HandFrame, Landmark, LandmarkFrame } from './landmarks'
+import { distanceReader, squarePixels, type PoseReader } from './poseReaders'
+import type { Handedness, HandFrame, LandmarkFrame } from './landmarks'
 import type { Axis } from './MouseDragAdapter'
 
 // "Signs": CubePalm's two-handed control scheme.
@@ -52,7 +52,6 @@ export const LAYER_SLICE: Record<SignLayer, { axis: Axis; layer: -1 | 0 | 1 }> =
   B: { axis: 'z', layer: -1 },
 }
 
-const FINGER_TIPS = [8, 12, 16, 20]
 
 // ---------------------------------------------------------------------------
 // Tuning knobs. These are the numbers to adjust if signs feel too eager or too
@@ -77,6 +76,17 @@ export interface SignOptions {
   // every sign came out on the wrong hand). Settings > Swap left and right
   // hand flips it for any camera/driver that does label them backwards.
   swapHands: boolean
+  // How a hand's pose is read from its landmarks. Left out, it is the
+  // distance rule with `extendedRatio`; poseReaders.ts has the alternatives.
+  reader?: PoseReader
+  // Undo the stretch of a non-square picture before reading the pose (the
+  // frame carries the picture's shape). Off by default: the distance rule's
+  // threshold was tuned by hand on the stretched numbers.
+  squarePixels?: boolean
+  // How long the tracker may lose a hand before that counts as the hand going
+  // away. Trackers drop the odd frame; treating each as "the sign was let go"
+  // restarted the hold, so a held sign turned late, or twice.
+  dropGraceMs: number
 }
 
 export const DEFAULT_SIGN_OPTIONS: SignOptions = {
@@ -86,6 +96,7 @@ export const DEFAULT_SIGN_OPTIONS: SignOptions = {
   holdMs: 550,
   minScore: 0.5,
   swapHands: false,
+  dropGraceMs: 240,
 }
 
 function realHandedness(label: Handedness, swapHands: boolean): Handedness {
@@ -93,15 +104,10 @@ function realHandedness(label: Handedness, swapHands: boolean): Handedness {
   return label === 'Left' ? 'Right' : 'Left'
 }
 
-function fingerPose(landmarks: Landmark[], extendedRatio: number): string {
-  const wrist = landmarks[0]
-  const scale = handScale(landmarks)
-  return FINGER_TIPS.map((tip) => (distance(landmarks[tip], wrist) / scale > extendedRatio ? '1' : '0')).join('')
-}
-
 /** The layer a hand's pose names, or null (open hand, fist, or unassigned). */
 export function readSign(hand: HandFrame, opts: SignOptions = DEFAULT_SIGN_OPTIONS): SignLayer | null {
-  return LAYER_FOR_POSE[fingerPose(hand.landmarks, opts.extendedRatio)] ?? null
+  const read = opts.reader ?? distanceReader(opts.extendedRatio)
+  return LAYER_FOR_POSE[read(hand.landmarks)] ?? null
 }
 
 /** The notation a sign makes with a given hand: right = clockwise, left = prime. */
@@ -117,6 +123,8 @@ export function signForNotation(notation: string): { hand: Handedness; layer: Si
 }
 
 interface HandSignState {
+  // When this hand was last seen at all (any pose); null if never.
+  lastSeenMs: number | null
   votes: Array<SignLayer | null>
   current: SignLayer | null
   heldSinceMs: number | null
@@ -129,7 +137,7 @@ export interface SignState {
   hands: Record<Handedness, HandSignState>
 }
 
-const emptyHand = (): HandSignState => ({ votes: [], current: null, heldSinceMs: null, fired: false })
+const emptyHand = (): HandSignState => ({ lastSeenMs: null, votes: [], current: null, heldSinceMs: null, fired: false })
 
 export function createSignState(): SignState {
   return { hands: { Left: emptyHand(), Right: emptyHand() } }
@@ -169,17 +177,26 @@ function mostVoted(votes: Array<SignLayer | null>): { layer: SignLayer | null; c
 
 function stepHand(
   prev: HandSignState,
-  sign: SignLayer | null,
+  // The pose this hand is showing; null for "no sign"; undefined when the
+  // tracker did not report the hand at all this frame.
+  seen: SignLayer | null | undefined,
   nowMs: number,
   opts: SignOptions,
 ): { next: HandSignState; turn: SignLayer | null } {
+  if (seen === undefined) {
+    // Lost for a moment: change nothing, so the vote and the hold carry on when
+    // the hand comes back. No turn is made on a frame with no hand in it.
+    if (prev.lastSeenMs !== null && nowMs - prev.lastSeenMs <= opts.dropGraceMs) return { next: prev, turn: null }
+  }
+  const sign = seen ?? null
+  prev = seen === undefined ? prev : { ...prev, lastSeenMs: nowMs }
   const votes = [...prev.votes, sign].slice(-opts.voteWindow)
   const { layer: winner, count } = mostVoted(votes)
   const recognised = winner && count >= opts.votesToSelect ? winner : null
 
   if (recognised !== prev.current) {
     // A new pose (or none): restart the hold, and re-arm.
-    return { next: { votes, current: recognised, heldSinceMs: recognised ? nowMs : null, fired: false }, turn: null }
+    return { next: { lastSeenMs: prev.lastSeenMs, votes, current: recognised, heldSinceMs: recognised ? nowMs : null, fired: false }, turn: null }
   }
   if (!recognised || prev.fired || prev.heldSinceMs === null) return { next: { ...prev, votes }, turn: null }
   // Only turn on a frame where the hand is actually showing the sign right
@@ -197,10 +214,11 @@ export function stepSigns(
   frame: LandmarkFrame,
   opts: SignOptions = DEFAULT_SIGN_OPTIONS,
 ): { next: SignState; events: SignEvent[] } {
-  const seen: Record<Handedness, SignLayer | null> = { Left: null, Right: null }
+  const seen: Partial<Record<Handedness, SignLayer | null>> = {}
   for (const hand of frame.hands) {
     if (hand.score < opts.minScore) continue
-    seen[realHandedness(hand.handedness, opts.swapHands)] = readSign(hand, opts)
+    const shaped = opts.squarePixels && frame.aspect ? { ...hand, landmarks: squarePixels(hand.landmarks, frame.aspect) } : hand
+    seen[realHandedness(hand.handedness, opts.swapHands)] = readSign(shaped, opts)
   }
 
   const events: SignEvent[] = []

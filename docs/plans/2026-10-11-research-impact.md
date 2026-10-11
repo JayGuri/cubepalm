@@ -64,12 +64,14 @@ Tests: all three read the nine poses correctly on a clean, front-facing hand; `d
 ### Task A4: The recognition study
 
 **Files:**
-- Create: `research/signs.study.ts`, `research/trainReader.ts`
+- Create: `research/sign-recognition.study.ts`, `research/trainReader.ts`
 - Output: `docs/research/sign-recognition.md`, `src/core/gestures/learnedWeights.json`
 
 For each reader: accuracy over the nine poses as each one of these varies while the rest stay nominal: hand roll, pitch toward the camera, yaw, landmark noise, finger-length ratio, partial curl (a half-raised finger). Plus a confusion matrix at a realistic mixed setting, and false-positive rate on non-sign hands (open hand, fist, relaxed). The learned reader is trained on one random draw and tested on a different one.
 
 Decision rule, written into the report before the numbers are read: ship the reader with the highest accuracy at the mixed setting, unless it is within one percentage point of the current rule, in which case keep the current rule.
+
+Amended before the study was first run: a reader that wins only on model hands does not replace the default, which the owner has tested by hand. It ships as an option in Settings. It becomes the default only when recordings of real hands (Task B3) confirm the result.
 
 ### Task A5: Smoothing in time
 
@@ -112,7 +114,7 @@ Per method: turns, median time per turn, mistakes per 100 turns, solves and time
 - Create: `src/components/screens/Recorder.tsx`, `src/core/gestures/recording.ts` + test
 - Modify: `src/App.tsx` (route `/record`)
 
-Prompts each sign in turn, records landmark frames with the prompted label and the conditions the person ticks (lighting, distance, glasses), and downloads a JSON file. `research/signs.study.ts` reads any files placed in `research/recordings/` and reports them next to the generated data.
+Prompts each sign in turn, records landmark frames with the prompted label and the conditions the person ticks (lighting, distance, glasses), and downloads a JSON file. `research/sign-recognition.study.ts` reads any files placed in `research/recordings/` and reports them next to the generated data.
 
 ---
 

@@ -54,7 +54,13 @@ export class HandLandmarkerService {
     // video replays the same one, so skip rather than throw.
     if (timestampMs <= this.lastTimestamp) return null
     this.lastTimestamp = timestampMs
-    return toLandmarkFrame(this.landmarker.detectForVideo(video, timestampMs), timestampMs)
+    const frame = toLandmarkFrame(this.landmarker.detectForVideo(video, timestampMs), timestampMs)
+    // Landmarks are fractions of the picture's width and height, so anything
+    // that measures them needs the picture's shape to put them on one scale.
+    const width = 'videoWidth' in video ? video.videoWidth : video.width
+    const height = 'videoHeight' in video ? video.videoHeight : video.height
+    if (width > 0 && height > 0) frame.aspect = width / height
+    return frame
   }
 
   dispose(): void {
