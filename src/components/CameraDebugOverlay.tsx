@@ -72,7 +72,7 @@ export function CameraDebugOverlay({ feed, width, height, mirror = true }: Camer
       width={width}
       height={height}
       data-testid="camera-debug-overlay"
-      className="pointer-events-none absolute inset-0"
+      className="pointer-events-none absolute inset-0 h-full w-full"
     />
   )
 }

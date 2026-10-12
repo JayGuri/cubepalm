@@ -15,7 +15,7 @@ const TILES = [
 ] as const
 
 const TILE =
-  'grid place-items-center rounded-xl px-1 py-2 text-center text-[0.72rem] font-bold leading-none text-[#10131A] shadow-[inset_0_-3px_0_rgba(0,0,0,0.18)] transition duration-200 hover:-translate-y-1 hover:shadow-[inset_0_-3px_0_rgba(0,0,0,0.18),0_10px_20px_-8px_var(--tile)] focus-visible:-translate-y-1 sm:min-w-[4.6rem] sm:rounded-2xl sm:px-3.5 sm:py-2.5 sm:text-sm'
+  'grid place-items-center rounded-xl px-0.5 py-2 text-center text-[0.66rem] min-[400px]:px-1 min-[400px]:text-[0.72rem] font-bold leading-none text-[#10131A] shadow-[inset_0_-3px_0_rgba(0,0,0,0.18)] transition duration-200 hover:-translate-y-1 hover:shadow-[inset_0_-3px_0_rgba(0,0,0,0.18),0_10px_20px_-8px_var(--tile)] focus-visible:-translate-y-1 sm:min-w-[4.6rem] sm:rounded-2xl sm:px-3.5 sm:py-2.5 sm:text-sm'
 
 export function SiteNav({ size = 44 }: { size?: number }) {
   return (

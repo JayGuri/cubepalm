@@ -218,6 +218,8 @@ interface RecordedSample {
   expected: string | null
   landmarks: Landmark[]
   aspect: number
+  /** The device and light the recording was made in, e.g. "phone, dim". */
+  setting: string
 }
 
 /**
@@ -236,7 +238,14 @@ function recordedSamples(): { samples: RecordedSample[]; files: number } {
       for (const frame of clip.frames) {
         if (frame.t < 400) continue
         const hand = frame.hands.find((h) => h.handedness === clip.hand)
-        if (hand) samples.push({ expected: expectedPose(clip.label), landmarks: unpackPoints(hand.points), aspect: frame.aspect ?? ASPECT })
+        if (hand) {
+          samples.push({
+            expected: expectedPose(clip.label),
+            landmarks: unpackPoints(hand.points),
+            aspect: frame.aspect ?? ASPECT,
+            setting: `${recording.conditions.device}, ${recording.conditions.lighting}`,
+          })
+        }
       }
     }
   }
@@ -368,6 +377,16 @@ it('sign recognition study', () => {
           ),
           '',
           'These are per-frame figures. The app also votes over frames and waits for a hold, so its turn-level accuracy is higher than a single frame\'s.',
+          '',
+          'Sign frames read correctly, by the device and light each recording was made in:',
+          '',
+          table(
+            ['Device, light', 'Sign frames', ...onRecorded.map((r) => r.name)],
+            [...new Set(signFrames.map((s) => s.setting))].sort().map((setting) => {
+              const these = signFrames.filter((s) => s.setting === setting)
+              return [setting, these.length, ...onRecorded.map((r) => share(these.filter((s) => r.read(s) === s.expected).length, these.length))]
+            }),
+          ),
         ].join('\n')
 
   // The fitted numbers become constants in the app, so the app and this report cannot drift apart.

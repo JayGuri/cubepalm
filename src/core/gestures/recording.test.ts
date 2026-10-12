@@ -41,7 +41,8 @@ describe('hand recordings', () => {
     const recording: Recording = {
       version: 1,
       recordedAt: '2026-10-11T10:00:00.000Z',
-      conditions: { lighting: 'dim', distance: 'far' },
+      conditions: { lighting: 'dim', distance: 'far', device: 'phone' },
+      camera: { width: 480, height: 640 },
       clips: [{ label: 'R', hand: 'Right', frames: [packFrame(frameOf('1000', 0), 0), packFrame(frameOf('1000', 40), 0)] }],
     }
     expect(parseRecording(JSON.parse(JSON.stringify(recording)))).toEqual(recording)
@@ -60,6 +61,8 @@ describe('hand recordings', () => {
     expect(parsed.clips).toHaveLength(1)
     // The frame is kept (its time matters); the hand with too few points is not.
     expect(parsed.clips[0].frames).toEqual([{ t: 0, aspect: null, hands: [] }])
-    expect(parsed.conditions).toEqual({ lighting: 'bright', distance: 'near' })
+    // Anything not stated falls back to the commonest case, and a missing camera size stays unknown.
+    expect(parsed.conditions).toEqual({ lighting: 'bright', distance: 'near', device: 'computer' })
+    expect(parsed.camera).toBeNull()
   })
 })

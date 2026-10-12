@@ -34,7 +34,12 @@ function download(name: string, text: string) {
 }
 
 export function Recorder() {
-  const [conditions, setConditions] = useState<Conditions>({ lighting: 'bright', distance: 'near' })
+  // The device is guessed from the screen (a touch screen under 700 pixels wide
+  // is a phone) and can be corrected: cameras differ, and that is worth comparing.
+  const [conditions, setConditions] = useState<Conditions>(() => {
+    const touch = window.matchMedia('(pointer: coarse)').matches
+    return { lighting: 'bright', distance: 'near', device: !touch ? 'computer' : Math.min(window.innerWidth, window.innerHeight) < 700 ? 'phone' : 'tablet' }
+  })
   const [started, setStarted] = useState(false)
   const [index, setIndex] = useState(0)
   const [phase, setPhase] = useState<'ready' | 'recording'>('ready')
@@ -76,17 +81,50 @@ export function Recorder() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [started, done, gestures.ready, phase, index])
 
+  // The camera picture's size, noted once it is running (a phone held upright gives a tall picture).
+  const [camera, setCamera] = useState<Recording['camera']>(null)
+  useEffect(() => {
+    const video = gestures.videoRef.current
+    if (!gestures.ready || !video) return
+    // The size is known once the first frame has arrived.
+    const note = () => {
+      if (video.videoWidth > 0) setCamera({ width: video.videoWidth, height: video.videoHeight })
+    }
+    note()
+    video.addEventListener('loadedmetadata', note)
+    return () => video.removeEventListener('loadedmetadata', note)
+  }, [gestures.ready, gestures.videoRef])
+
   const frames = clips.reduce((n, c) => n + c.frames.length, 0)
-  const save = () => {
-    const recording: Recording = { version: 1, recordedAt: new Date().toISOString(), conditions, clips }
-    download(`cubepalm-hands-${recording.recordedAt.slice(0, 19).replace(/[:T]/g, '-')}.json`, JSON.stringify(recording))
+  const build = () => {
+    const recording: Recording = { version: 1, recordedAt: new Date().toISOString(), conditions, camera, clips }
+    const name = `cubepalm-hands-${conditions.device}-${conditions.lighting}-${recording.recordedAt.slice(0, 19).replace(/[:T]/g, '-')}.json`
+    return { name, text: JSON.stringify(recording) }
   }
+  const save = () => {
+    const { name, text } = build()
+    download(name, text)
+  }
+  // On a phone a downloaded file is hard to find again; handing it straight to
+  // a messaging or mail app is easier. Offered only where the browser can do it.
+  const shareFile = () => {
+    const { name, text } = build()
+    return new File([text], name, { type: 'application/json' })
+  }
+  const [canShare] = useState(() => {
+    try {
+      return typeof navigator.canShare === 'function' && navigator.canShare({ files: [new File(['{}'], 'x.json', { type: 'application/json' })] })
+    } catch {
+      return false
+    }
+  })
+  const share = () => void navigator.share({ files: [shareFile()], title: 'CubePalm hand recording' }).catch(() => undefined)
 
   return (
-    <main className="min-h-dvh bg-[#16171B] px-6 py-12 text-[#ECEAE4]">
+    <main className="min-h-dvh bg-[#16171B] px-4 py-8 text-[#ECEAE4] sm:px-6 sm:py-12">
       <div className="mx-auto max-w-2xl">
         <SiteNav size={40} />
-        <h1 className="font-display mt-10 text-4xl font-extrabold tracking-tight">Record your hand signs</h1>
+        <h1 className="font-display mt-8 text-3xl font-extrabold tracking-tight sm:mt-10 sm:text-4xl">Record your hand signs</h1>
 
         {!started && (
           <>
@@ -95,7 +133,7 @@ export function Recorder() {
               each hand, and asked to hold each for a few seconds. It takes about {Math.round((STEPS.length * (READY_MS + RECORD_MS)) / 60_000)} minutes.
             </p>
             <ul className="mt-5 list-disc space-y-1.5 pl-5 text-sm text-[#B2B0B9]">
-              <li>What is kept: the positions of 21 points on each hand, about 25 times a second, and the two answers below.</li>
+              <li>What is kept: the positions of 21 points on each hand, about 25 times a second, the three answers below, and the size of the camera's picture.</li>
               <li>What is not kept: any picture or video. Nothing that shows your face, your room or who you are.</li>
               <li>Nothing is sent. At the end you get a file, and it is yours to send or delete.</li>
             </ul>
@@ -112,7 +150,7 @@ export function Recorder() {
             </fieldset>
             <fieldset className="mt-5">
               <legend className="font-medium">How far your hands will be from the camera</legend>
-              <div className="mt-2 flex gap-2">
+              <div className="mt-2 flex flex-wrap gap-2">
                 {(['near', 'far'] as const).map((v) => (
                   <Choice key={v} on={conditions.distance === v} onClick={() => setConditions((c) => ({ ...c, distance: v }))}>
                     {v === 'near' ? 'About an arm’s length' : 'Farther back'}
@@ -120,6 +158,21 @@ export function Recorder() {
                 ))}
               </div>
             </fieldset>
+            <fieldset className="mt-5">
+              <legend className="font-medium">This device</legend>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {(['phone', 'tablet', 'computer'] as const).map((v) => (
+                  <Choice key={v} on={conditions.device === v} onClick={() => setConditions((c) => ({ ...c, device: v }))}>
+                    {v === 'phone' ? 'Phone' : v === 'tablet' ? 'Tablet' : 'Laptop or desktop'}
+                  </Choice>
+                ))}
+              </div>
+            </fieldset>
+            {conditions.device !== 'computer' && (
+              <p className="mt-5 rounded-xl border border-white/10 bg-[#202227] p-3 text-sm text-[#B2B0B9]" data-testid="record-prop-up">
+                Stand the {conditions.device} up against something first, so both hands are free and it does not move.
+              </p>
+            )}
 
             <button
               type="button"
@@ -134,7 +187,12 @@ export function Recorder() {
 
         {started && !done && (
           <div className="mt-8" data-testid="record-step">
-            <div className="relative aspect-video w-full overflow-hidden rounded-2xl border border-white/10 bg-black">
+            {/* The preview takes the camera's own shape (tall on a phone held upright), so the
+                skeleton drawn over it lines up, and never more than about half the screen's height. */}
+            <div
+              className="relative mx-auto max-h-[52dvh] w-full overflow-hidden rounded-2xl border border-white/10 bg-black"
+              style={{ aspectRatio: camera ? `${camera.width} / ${camera.height}` : '16 / 9', maxWidth: camera ? `calc(52dvh * ${camera.width / camera.height})` : undefined }}
+            >
               {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
               <video ref={gestures.videoRef} className="h-full w-full -scale-x-100 object-cover" playsInline muted />
               <CameraDebugOverlay feed={gestures.feed} width={640} height={360} />
@@ -144,17 +202,23 @@ export function Recorder() {
             </div>
             {gestures.error && <p className="mt-3 text-sm text-[#FF8A9A]">{gestures.error}</p>}
 
-            <div className="mt-5 flex items-center gap-4 rounded-2xl border border-white/10 bg-[#202227] p-5">
-              {isSign(step.label) && <PoseIcon layer={step.label} hand={step.hand} size={44} />}
-              <div className="min-w-0 flex-1">
-                <p className="text-sm text-[#9C9AA3]">
-                  {index + 1} of {STEPS.length}, <b style={{ color: HAND_COLOR[step.hand] }}>{step.hand.toLowerCase()} hand</b>
-                </p>
-                <p className="font-display text-2xl font-bold">{isSign(step.label) ? `Show the sign for ${step.label}` : CLIP_PROMPT[step.label]}</p>
+            {/* What to show, then whether it is being recorded: side by side on a
+                wide screen, stacked on a phone so neither squeezes the other. */}
+            <div className="mt-4 rounded-2xl border border-white/10 bg-[#202227] p-4 sm:mt-5 sm:flex sm:items-center sm:gap-4 sm:p-5">
+              <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
+                {isSign(step.label) && <PoseIcon layer={step.label} hand={step.hand} size={44} />}
+                <div className="min-w-0">
+                  <p className="text-sm text-[#9C9AA3]">
+                    {index + 1} of {STEPS.length}, <b style={{ color: HAND_COLOR[step.hand] }}>{step.hand.toLowerCase()} hand</b>
+                  </p>
+                  <p className="font-display text-xl font-bold leading-snug sm:text-2xl">
+                    {isSign(step.label) ? `Show the sign for ${step.label}` : CLIP_PROMPT[step.label]}
+                  </p>
+                </div>
               </div>
               <span
                 data-testid="record-phase"
-                className={`shrink-0 rounded-full px-3 py-1 text-sm font-semibold ${phase === 'recording' && gestures.ready ? 'bg-[#E5384F] text-white' : 'bg-white/10 text-[#9C9AA3]'}`}
+                className={`mt-3 block rounded-full px-3 py-1.5 text-center text-sm font-semibold sm:mt-0 sm:shrink-0 ${phase === 'recording' && gestures.ready ? 'bg-[#E5384F] text-white' : 'bg-white/10 text-[#9C9AA3]'}`}
               >
                 {!gestures.ready ? 'Waiting' : phase === 'recording' ? 'Recording, hold still' : 'Get ready'}
               </span>
@@ -168,9 +232,21 @@ export function Recorder() {
             <p className="mt-2 text-[#9C9AA3]">
               {clips.length} clips and {frames} frames recorded. Download the file, then send it to whoever asked you, or keep it, or delete it.
             </p>
-            <button type="button" data-testid="record-download" className="mt-5 rounded-full bg-[#FFD500] px-6 py-2.5 font-semibold text-[#16171B] hover:bg-[#FFE04D]" onClick={save}>
-              Download the recording
-            </button>
+            <div className="mt-5 flex flex-wrap gap-3">
+              {canShare && (
+                <button type="button" data-testid="record-share" className="rounded-full bg-[#FFD500] px-6 py-2.5 font-semibold text-[#16171B] hover:bg-[#FFE04D]" onClick={share}>
+                  Send the recording
+                </button>
+              )}
+              <button
+                type="button"
+                data-testid="record-download"
+                className={canShare ? 'rounded-full border border-white/20 px-6 py-2.5 font-semibold hover:border-white/50' : 'rounded-full bg-[#FFD500] px-6 py-2.5 font-semibold text-[#16171B] hover:bg-[#FFE04D]'}
+                onClick={save}
+              >
+                Download the recording
+              </button>
+            </div>
           </div>
         )}
       </div>

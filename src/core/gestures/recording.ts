@@ -52,9 +52,13 @@ export interface Clip {
   frames: RecordedFrame[]
 }
 
+export type DeviceKind = 'phone' | 'tablet' | 'computer'
+
 export interface Conditions {
   lighting: 'bright' | 'dim'
   distance: 'near' | 'far'
+  /** What the camera belongs to. Cameras differ in picture shape and sharpness, so this is worth comparing. */
+  device: DeviceKind
 }
 
 export interface Recording {
@@ -62,6 +66,8 @@ export interface Recording {
   /** ISO date and time. */
   recordedAt: string
   conditions: Conditions
+  /** The camera picture's size in pixels, when known (a phone held upright gives a tall one). */
+  camera: { width: number; height: number } | null
   clips: Clip[]
 }
 
@@ -105,10 +111,16 @@ export function parseRecording(data: unknown): Recording | null {
     clips.push({ label: clip.label as ClipLabel, hand: clip.hand, frames })
   }
   const c = d.conditions as Partial<Conditions> | undefined
+  const cam = d.camera as { width?: unknown; height?: unknown } | null | undefined
   return {
     version: 1,
     recordedAt: typeof d.recordedAt === 'string' ? d.recordedAt : '',
-    conditions: { lighting: c?.lighting === 'dim' ? 'dim' : 'bright', distance: c?.distance === 'far' ? 'far' : 'near' },
+    conditions: {
+      lighting: c?.lighting === 'dim' ? 'dim' : 'bright',
+      distance: c?.distance === 'far' ? 'far' : 'near',
+      device: c?.device === 'phone' || c?.device === 'tablet' ? c.device : 'computer',
+    },
+    camera: cam && typeof cam.width === 'number' && typeof cam.height === 'number' && cam.width > 0 && cam.height > 0 ? { width: cam.width, height: cam.height } : null,
     clips,
   }
 }

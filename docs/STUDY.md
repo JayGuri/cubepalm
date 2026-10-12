@@ -2,7 +2,7 @@
 
 Thank you for helping. There are two tasks. Each takes about ten minutes, needs no installation, and can be done without anyone explaining it. Do either or both.
 
-You need a laptop or desktop with a webcam and a recent Chrome, Edge or Firefox. Open **https://cubepalm.vercel.app**.
+You need a phone, a tablet or a computer with a camera, and a recent Chrome, Edge, Safari or Firefox. Open **https://cubepalm.vercel.app**. If you have more than one device, doing Task 1 on each of them is especially useful: cameras differ, and that is one of the things being measured.
 
 ## What is and is not collected
 
@@ -13,18 +13,18 @@ You need a laptop or desktop with a webcam and a recent Chrome, Edge or Firefox.
 
 ## Task 1: record your hand signs (about 3 minutes)
 
-1. Sit so the camera can see both hands from about an arm's length, with your face to a window or a light if you can.
+1. Sit so the camera can see both hands from about an arm's length, with your face to a window or a light if you can. On a phone or tablet, stand it up against something first so both hands are free and it does not move.
 2. Go to **Settings**, then **Record** (beside "Help measure hand tracking").
-3. Answer the two questions about your light and your distance, then press **I agree, start recording**. Allow the camera when the browser asks.
+3. Answer the three questions (your light, your distance, your device), then press **I agree, start recording**. Allow the camera when the browser asks.
 4. The page shows 24 hand shapes, one at a time: twelve for your right hand, then twelve for your left. For each one it says **Get ready**, then **Recording, hold still**. Make the shape during "get ready" and hold it until the next one appears.
    - Nine are finger signs, shown as a small picture: raise the lit fingers and fold the others. The thumb does not matter.
    - Three are not signs: a relaxed half-open hand, an open hand, and a fist.
    - Use only the hand it names. Keep the other one out of the picture.
-5. At the end press **Download the recording**. The file is named `cubepalm-hands-<date>.json`.
+5. At the end press **Send the recording** (on a phone or tablet, this opens your usual sharing menu) or **Download the recording**. The file is named `cubepalm-hands-<device>-<light>-<date>.json`.
 
 If you make a mistake on one shape, carry on; one bad clip does not spoil the rest. If something goes badly wrong, reload the page and start again.
 
-**Even more useful, if you have five more minutes:** do it a second time in different conditions, for example in dim light, or sitting farther back, and answer the two questions accordingly.
+**Please do it twice: once in bright light and once in dim light** (a room with the main light off, or the curtains closed), answering the first question accordingly each time. If you have a second device, the same two recordings on it are worth as much again.
 
 ## Task 2: turn the cube four ways (about 10 minutes)
 
@@ -52,4 +52,4 @@ Send the file or files to the person who asked you, by whatever means you normal
 - Put hand recordings in `research/recordings/` and run `npm run research`. The report at `docs/research/sign-recognition.md` gains a section scoring every reader on them. That folder ignores `*.json`, so recordings are not committed by accident; ask each person before sharing theirs.
 - Usage files are read by eye for now, or loaded into the stats page's own summary code (`summariseUsage` in `src/state/usageLog.ts`).
 - Keep a note of who sent what only if they are happy for you to, and do not put names in file names.
-- Five people in two lighting conditions each is enough to say something about the readers. Fewer is still worth having.
+- Five people in two lighting conditions each is enough to say something about the readers. Fewer is still worth having. Different people matter most (hands differ more than cameras do); different devices come second, and the report breaks results down by device and light.
