@@ -29,9 +29,11 @@ export function MoveArrow({ notation }: { notation: string }) {
   }, [parsed?.axis, parsed?.layer, parsed?.angle]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // A gentle pulse so the eye finds it.
-  useFrame(({ clock }) => {
+  useFrame(({ clock, invalidate }) => {
     const o = 0.65 + 0.3 * Math.sin(clock.elapsedTime * 4)
     for (const m of materials.current) if (m) m.opacity = o
+    // The canvas draws on demand; while the arrow is up it asks for the next frame.
+    invalidate()
   })
 
   if (!placement) return null

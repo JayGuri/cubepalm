@@ -25,6 +25,21 @@ Everything runs in your browser, so your camera feed never leaves your device.
 
 A cube you hold in the palm of your hand, without holding anything: your open hand, in front of a webcam, is the controller.
 
+## Measured, not claimed
+
+The parts of this project that could be measured have been, by scripts in the repository that anyone can re-run (`npm run research`). The short version is in the **[technical report](docs/REPORT.md)**.
+
+| Question | Answer | Where |
+|---|---|---|
+| How well is a hand sign read, and what breaks it? | The shipped rule read 75.4% of signs on a hand model; a units error in the geometry accounts for much of the gap (89.9% once corrected). A stricter reader cuts a relaxed hand being read as a sign from 20.9% to 0.5%. Not yet measured on people. | [sign-recognition.md](docs/research/sign-recognition.md) |
+| What do the vote, the hold and smoothing each buy? | Waiting 240 ms for a lost hand takes correctly turned signs from 68.6% to 97.5% when the tracker drops one frame in five. | [temporal-filtering.md](docs/research/temporal-filtering.md) |
+| How short are the solver's routes? | 32.2 quarter turns at first answer (about 29 ms), 24.7 after five seconds, over 50 random cubes. Proven shortest for every position up to 8 face turns from solved; for no random cube within 5 seconds. | [solver.md](docs/research/solver.md) |
+| Are scrambles fair? | 600,000 generated states: none unreachable, nine chi-square tests all within the 99.9% bound. | [scrambles.md](docs/research/scrambles.md) |
+| Why can the answers be trusted? | Six claims with proofs: the bounds never over-estimate, the search is complete, the scramble generator is uniform. | [MATH.md](docs/MATH.md#why-the-answers-can-be-trusted) |
+| How is it put together? | Threads, message protocols, failure paths, storage. | [ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+
+If you have ten minutes and a webcam, you can help measure it on real hands: [STUDY.md](docs/STUDY.md).
+
 ## What is new here
 
 Hand-controlled cube demos usually do one thing: a pinch or a swipe turns a face, on a single 3×3, with a solver library bolted on. CubePalm goes further.

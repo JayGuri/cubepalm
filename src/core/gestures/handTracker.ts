@@ -34,6 +34,9 @@ function startWorkerTracker(): Promise<HandTracker> {
       reject(new Error(reason))
     }
     const timer = setTimeout(() => giveUp('hand-tracking worker did not start'), WORKER_START_MS)
+    // Set if the worker dies after it has started: every later detect then fails
+    // loudly, where it used to return nothing for ever.
+    let died = false
     worker.onerror = () => giveUp('hand-tracking worker failed to load')
     worker.onmessage = (e: MessageEvent<TrackerResponse>) => {
       const message = e.data
@@ -45,11 +48,18 @@ function startWorkerTracker(): Promise<HandTracker> {
         return
       }
       clearTimeout(timer)
+      worker.onerror = () => {
+        died = true
+        worker.terminate()
+        waiting?.(null)
+        waiting = null
+      }
       resolve({
         where: 'worker',
         delegate: message.delegate,
         async detect(video, timestampMs) {
           // One frame in flight at a time: a slow device drops frames instead of queueing them.
+          if (died) throw new Error('Hand tracking stopped unexpectedly. Switch to Mouse and back to Hands to restart it.')
           if (waiting) return null
           const bitmap = await createImageBitmap(video)
           return new Promise<LandmarkFrame | null>((done) => {

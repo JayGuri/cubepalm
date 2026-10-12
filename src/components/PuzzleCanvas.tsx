@@ -16,7 +16,7 @@ const PLASTIC = '#14161F'
 // Fraction of each piece's own slot distance from centre used as its visual
 // gap offset (see the render loop below) -- proportional, not a fixed unit
 // count, so it looks right across cube3's ~1.5-unit half-extent and
-// megaminx's ~1-unit dodecahedron alike. Widened from 0.045 on user feedback
+// any other puzzle's alike. Widened from 0.045 on user feedback
 // that the seams read as too thin to feel like a real cube's black plastic.
 const GAP_FRACTION = 0.075
 // How long a single quarter/half turn takes to visually rotate into place.
@@ -568,7 +568,7 @@ function PuzzleCanvasInner({
   // Megaminx use a unit-radius base solid, so without this they rendered at
   // barely a third of cube3's on-screen size -- confirmed by screenshot, not
   // a theoretical concern. Normalising every puzzle's overall extent to the
-  // same target radius keeps one fixed camera framing working for all five.
+  // same target radius keeps one fixed camera framing working for every puzzle.
   const scale = useMemo(() => {
     // Mirror pieces are placed at their own offsets (see Pieces), not baked
     // into their geometry, so measuring geometry alone would undercount the
@@ -736,8 +736,17 @@ export const PuzzleCanvas = memo(function PuzzleCanvas(props: PuzzleCanvasProps)
   // Bumped when a lost graphics context comes back, to rebuild the scene on it.
   const [epoch, setEpoch] = useState(0)
   if (webglAvailable()) return <PuzzleCanvasInner key={epoch} {...props} onContextRestored={() => setEpoch((n) => n + 1)} />
+  return <NoWebGL {...props} />
+})
+
+function NoWebGL({ className, animatingMove, onAnimationComplete }: PuzzleCanvasProps) {
+  // There is no picture of the turn to wait for: report each one done at once,
+  // so the move queue (and Scramble, Solve, the guide) carries on at full speed.
+  useEffect(() => {
+    if (animatingMove) onAnimationComplete?.()
+  }, [animatingMove, onAnimationComplete])
   return (
-    <div className={`${props.className ?? ''} grid place-items-center p-8 text-center`} data-testid="no-webgl">
+    <div className={`${className ?? ''} grid place-items-center p-8 text-center`} data-testid="no-webgl">
       <div className="max-w-sm">
         <p className="font-display text-2xl font-bold">3D graphics are not available</p>
         <p className="mt-3 text-[#9C9AA3]">
@@ -747,7 +756,7 @@ export const PuzzleCanvas = memo(function PuzzleCanvas(props: PuzzleCanvasProps)
       </div>
     </div>
   )
-})
+}
 
 // Polished metal is only silver when it has something to reflect. This paints a
 // tiny studio -- a light-to-dark backdrop with a few bright panels -- onto a

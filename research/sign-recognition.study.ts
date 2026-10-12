@@ -1,4 +1,4 @@
-import { writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { it } from 'vitest'
 import { makeModelHand, type HandPose } from '../src/core/gestures/handModel'
 import type { Landmark } from '../src/core/gestures/landmarks'
@@ -16,6 +16,7 @@ import {
   type MarginThresholds,
   type PoseReader,
 } from '../src/core/gestures/poseReaders'
+import { expectedPose, parseRecording, unpackPoints } from '../src/core/gestures/recording'
 import { POSE_FOR } from '../src/core/gestures/signGestures'
 import { gaussian, percent, round, seeded, table, writeReport } from './report'
 
@@ -208,6 +209,40 @@ function score(read: PoseReader, samples: Sample[]): Score {
   return { signs: signs / signTotal, falseSigns: falseSigns / otherTotal, fingers: fingers / (samples.length * 4) }
 }
 
+// ---- Recordings of real hands ------------------------------------------------
+
+const RECORDINGS_DIR = 'research/recordings'
+
+interface RecordedSample {
+  /** The pose the person was asked to make; null for a relaxed hand. */
+  expected: string | null
+  landmarks: Landmark[]
+  aspect: number
+}
+
+/**
+ * Every frame of every recording in research/recordings, where the hand the
+ * person was asked to use is in view. The first 400 ms of each clip are left
+ * out: the person may still be settling into the pose.
+ */
+function recordedSamples(): { samples: RecordedSample[]; files: number } {
+  if (!existsSync(RECORDINGS_DIR)) return { samples: [], files: 0 }
+  const names = readdirSync(RECORDINGS_DIR).filter((n) => n.endsWith('.json'))
+  const samples: RecordedSample[] = []
+  for (const name of names) {
+    const recording = parseRecording(JSON.parse(readFileSync(`${RECORDINGS_DIR}/${name}`, 'utf8')))
+    if (!recording) continue
+    for (const clip of recording.clips) {
+      for (const frame of clip.frames) {
+        if (frame.t < 400) continue
+        const hand = frame.hands.find((h) => h.handedness === clip.hand)
+        if (hand) samples.push({ expected: expectedPose(clip.label), landmarks: unpackPoints(hand.points), aspect: frame.aspect ?? ASPECT })
+      }
+    }
+  }
+  return { samples, files: names.length }
+}
+
 it('sign recognition study', () => {
   const train = draw(mixed(sources(TRAIN_SEED)), sources(TRAIN_SEED + 1))
   const thresholds = fitAngleThresholds(train)
@@ -299,6 +334,42 @@ it('sign recognition study', () => {
     'Because these are model hands, no reader replaces the default on this evidence. The dead-zone reader is offered as an option in Settings, and becomes the default only if recordings of real hands confirm it.',
   ].join(' ')
 
+  // Real hands, if anyone has recorded any. The readers here take the picture's
+  // real shape from each frame instead of assuming 4:3.
+  const recorded = recordedSamples()
+  const onRecorded: Array<{ name: string; read: (s: RecordedSample) => string }> = [
+    { name: 'Distance (shipped)', read: (s) => distanceReader()(s.landmarks) },
+    { name: 'Distance, square pixels', read: (s) => distanceReader()(squarePixels(s.landmarks, s.aspect)) },
+    { name: 'Angle', read: (s) => angleReader(thresholds)(squarePixels(s.landmarks, s.aspect)) },
+    { name: 'Angle with a dead zone', read: (s) => marginReader(margins)(squarePixels(s.landmarks, s.aspect)) },
+    { name: 'Learned', read: (s) => learnedReader(weights)(squarePixels(s.landmarks, s.aspect)) },
+  ]
+  const posed = recorded.samples.filter((s) => s.expected !== null)
+  const signFrames = posed.filter((s) => SIGN_POSES.has(s.expected!))
+  const relaxedFrames = recorded.samples.filter((s) => s.expected === null)
+  const share = (count: number, of: number) => (of === 0 ? 'n/a' : percent(count / of))
+  const recordedSection =
+    recorded.samples.length === 0
+      ? 'No recordings yet. Put files made at `/record` into `research/recordings/` and run the study again; this section then reports the same readers on real hands. Every claim above stays a claim about the model until it does.'
+      : [
+          `${recorded.files} recording file(s), ${recorded.samples.length} frames with the asked-for hand in view (${signFrames.length} of a sign, ${relaxedFrames.length} of a relaxed hand). The fitted readers were fitted on model hands only, so every frame here is unseen.`,
+          '',
+          table(
+            ['Reader', 'Sign frames read as that sign', 'Open hand and fist read correctly', 'Relaxed hand read as a sign'],
+            onRecorded.map((r) => {
+              const others = posed.filter((s) => !SIGN_POSES.has(s.expected!))
+              return [
+                r.name,
+                share(signFrames.filter((s) => r.read(s) === s.expected).length, signFrames.length),
+                share(others.filter((s) => r.read(s) === s.expected).length, others.length),
+                share(relaxedFrames.filter((s) => SIGN_POSES.has(r.read(s))).length, relaxedFrames.length),
+              ]
+            }),
+          ),
+          '',
+          'These are per-frame figures. The app also votes over frames and waits for a hold, so its turn-level accuracy is higher than a single frame\'s.',
+        ].join('\n')
+
   // The fitted numbers become constants in the app, so the app and this report cannot drift apart.
   writeFileSync(
     'src/core/gestures/trainedReaders.ts',
@@ -369,6 +440,7 @@ it('sign recognition study', () => {
           table(['Index', 'Middle', 'Ring', 'Little'], [fingerErrors.map((e) => percent(e, 2))]),
         ].join('\n'),
       },
+      { heading: 'Recordings of real hands', body: recordedSection },
       {
         heading: 'Fitted values',
         body: [

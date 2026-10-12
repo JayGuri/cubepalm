@@ -144,6 +144,10 @@ How often each finger is misread:
 | --- | --- | --- | --- |
 | 0.07% | 0.00% | 0.09% | 21.81% |
 
+## Recordings of real hands
+
+No recordings yet. Put files made at `/record` into `research/recordings/` and run the study again; this section then reports the same readers on real hands. Every claim above stays a claim about the model until it does.
+
 ## Fitted values
 
 Angle reader thresholds: reach > 0.5, align > 0.2.

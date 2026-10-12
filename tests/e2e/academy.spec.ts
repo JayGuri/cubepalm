@@ -69,11 +69,13 @@ test('Solve for me plays the solution back with controls, on both cubes', async 
     await expect(page.getByTestId('app')).toHaveAttribute('data-solver-ready', 'true', { timeout: 45_000 })
     await page.getByRole('button', { name: 'Scramble', exact: true }).click()
     await expect(page.getByTestId('solved-status')).toHaveText('Scrambled', { timeout: 30_000 })
-    await expect(page.getByRole('button', { name: /solve for me/i })).toBeEnabled({ timeout: 30_000 })
+    // The Mirror Cube draws at about a second a turn without a graphics card, so
+    // dealing and playing back a scramble is given time, not raced.
+    await expect(page.getByRole('button', { name: /solve for me/i })).toBeEnabled({ timeout: 90_000 })
     await page.getByRole('button', { name: /solve for me/i }).click()
     await expect(page.getByTestId('solution-player')).toBeVisible()
     await expect(page.getByTestId('solution-play')).toBeVisible({ timeout: 15_000 })
-    await expect(page.getByTestId('solved-status')).toHaveText('Solved', { timeout: 60_000 })
+    await expect(page.getByTestId('solved-status')).toHaveText('Solved', { timeout: 120_000 })
     await expect(page.getByTestId('solution-progress')).toHaveText('Solved')
     await page.getByTestId('solution-close').click()
     await expect(page.getByTestId('solution-player')).toHaveCount(0)

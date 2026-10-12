@@ -40,6 +40,7 @@ import { usePuzzleStore } from '../../state/puzzleStore'
 import { getSolverError, getSolverStatus, quarterTurns, retrySolver, subscribeSolverStatus } from '../../core/solvers/kociemba'
 import { useAcademyStore } from '../../state/academyStore'
 import { TURN_MS, useSettingsStore } from '../../state/settingsStore'
+import { dominantMethod, flushUsage, recordUsage, type InputMethod } from '../../state/usageLog'
 
 type InputMode = 'mouse' | 'hands'
 
@@ -115,7 +116,7 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
     const opts = signOptions(signReading, swapHands)
     const r = stepSigns(signsRef.current, smoothing.current ? smoothing.current(f) : f, opts)
     signsRef.current = r.next
-    for (const e of r.events) userMove(e.move)
+    for (const e of r.events) userMove(e.move, 'hands')
     const held = activeSigns(r.next, f.timestampMs, opts).map((s) => ({ ...s, progress: Math.round(s.progress * 12) / 12 }))
     const key = held.map((s) => `${s.hand}${s.notation}${s.fired}${s.progress}`).join('|')
     if (key !== heldKeyRef.current) {
@@ -344,10 +345,11 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
 
   // Every move the USER makes -- sign, key, drag -- comes through here.
   // (Scramble and Solve feed the queue directly: they aren't the user's.)
-  const userMove = (move: Move) => {
+  const userMove = (move: Move, method: InputMethod = 'drag') => {
     // A scramble is being dealt: a turn now would be buried in the middle of it.
     if (busyRef.current) return
     if (solveActiveRef.current) closeSolution()
+    logTurn(move, method)
     countMove(move, true)
     void enqueueMoves([move]).then(() => {
       checkLesson()
@@ -401,6 +403,49 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
 
   // Stable identity, so the 3D canvas (which takes this as a prop) is not
   // re-rendered every time this screen is -- the timer alone ticks 5 times a second.
+  // ---- The usage log (this device only; see src/state/usageLog.ts) -----------
+  const lastTurnAtRef = useRef<number | null>(null)
+  const attemptMethodsRef = useRef<InputMethod[]>([])
+  const logTurn = (move: Move, method: InputMethod) => {
+    const now = Date.now()
+    const g = guideRef.current
+    const asked = g ? g.steps[g.index] : null
+    recordUsage({
+      k: 'turn',
+      at: now,
+      m: method,
+      gap: lastTurnAtRef.current === null ? null : now - lastTurnAtRef.current,
+      g: asked === null ? 'none' : expandSteps([move])[0] === asked ? 'on' : 'off',
+    })
+    lastTurnAtRef.current = now
+    attemptMethodsRef.current.push(method)
+  }
+  // A new attempt (the clock back at zero): gaps and the method tally start over.
+  useEffect(() => {
+    if (timer.start !== null) return
+    lastTurnAtRef.current = null
+    attemptMethodsRef.current = []
+  }, [timer.start])
+  // A scrambled cube solved: one line in the log.
+  const loggedSolveRef = useRef<number | null>(null)
+  useEffect(() => {
+    if (timer.end === null || timer.start === null || loggedSolveRef.current === timer.end) return
+    loggedSolveRef.current = timer.end
+    recordUsage({ k: 'solve', at: timer.end, ms: timer.end - timer.start, moves: moveCount, m: dominantMethod(attemptMethodsRef.current), help: assisted, ranked })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timer.end])
+  // Written when the page is hidden or the screen is left, not on every turn.
+  useEffect(() => {
+    const onHide = () => {
+      if (document.hidden) flushUsage()
+    }
+    document.addEventListener('visibilitychange', onHide)
+    return () => {
+      document.removeEventListener('visibilitychange', onHide)
+      flushUsage()
+    }
+  }, [])
+
   const userMoveRef = useRef(userMove)
   userMoveRef.current = userMove
   const handleMove = useCallback((move: Move | null) => {
@@ -484,6 +529,7 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
     const last = usePuzzleStore.getState().moveHistory.at(-1)
     undo()
     if (last) {
+      recordUsage({ k: 'undo', at: Date.now() })
       countMove(last, true)
       checkFinish()
     }
@@ -553,7 +599,7 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
       const move = moveFromKey({ key: e.key, shiftKey: e.shiftKey, altKey: e.altKey }, plugin.snapAngleDeg)
       if (!move) return
       e.preventDefault()
-      userMove(move)
+      userMove(move, 'keys')
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
@@ -746,7 +792,7 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
           </div>
 
           {touchScreen && inputMode === 'mouse' && (
-            <MovePad disabled={busy} hint={guideStatus === 'following' && guide ? guide.steps[guide.index] : null} onTurn={(notation) => userMove({ alg: new Alg(notation), snapAngleDeg: plugin.snapAngleDeg })} />
+            <MovePad disabled={busy} hint={guideStatus === 'following' && guide ? guide.steps[guide.index] : null} onTurn={(notation) => userMove({ alg: new Alg(notation), snapAngleDeg: plugin.snapAngleDeg }, 'buttons')} />
           )}
 
           {lesson ? (
@@ -779,6 +825,7 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
             guideActive={guideStatus !== 'off'}
             solveActive={solveStatus !== 'off'}
             canUndo={moveHistory.length > startLength}
+            solverDown={solverStatus === 'failed'}
             canReset={moveHistory.length > startLength}
             ranked={ranked}
             onCustom={() => setScrambleDialogOpen(true)}
@@ -813,7 +860,7 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
           {(error || queueError) && <p className="px-6 pb-3 text-sm text-[#EF4444]">{error || queueError}</p>}
           {solverStatus === 'failed' && (
             <p className="flex flex-wrap items-center gap-3 px-6 pb-3 text-sm text-[#F5B83D]" data-testid="solver-failed">
-              The solver could not start, so Scramble, Guide me and Solve for me are off. You can still turn the cube.
+              The solver could not start, so Scramble, Guide me and Solve for me are off. You can still turn the cube and set up a scramble of your own.
               <button type="button" className={BUTTON} onClick={() => void retrySolver().catch(() => undefined)} title={getSolverError() ?? undefined}>
                 Try again
               </button>

@@ -484,11 +484,11 @@ interface Root {
  * its route in the background while you play, and drop the work the instant
  * you move.
  *
- * Phase 1 is pruned two ways. By the cost to reach G1 against the current
- * level (the usual IDA* rule), and by a whole-cube lower bound -- the largest
- * of the G1 distance, the corner permutation, six edges and the slice edges --
- * against the best total found so far. That second rule cuts branches that
- * could reach G1 but could never finish cheaper than what is already in hand.
+ * Phase 1 is pruned by the cost to reach G1 against the current level (the
+ * usual IDA* rule), using the three phase-1 tables. A second rule, a whole-cube
+ * lower bound against the best total so far, was tried and measured to gain
+ * nothing at these depths, so it was removed; that also means this search
+ * needs no proof tables, which keeps helper workers light.
  *
  * If every level below the best cost is exhausted, nothing cheaper exists:
  * the best solution is provably optimal (`exhausted`).
@@ -879,10 +879,10 @@ function randomBelow(n: number): number {
   return buffer[0] % n
 }
 
-function randomPermutation(n: number): number[] {
+function randomPermutation(n: number, below: (n: number) => number): number[] {
   const p = Array.from({ length: n }, (_, i) => i)
   for (let i = n - 1; i > 0; i--) {
-    const j = randomBelow(i + 1)
+    const j = below(i + 1)
     ;[p[i], p[j]] = [p[j], p[i]]
   }
   return p
@@ -898,16 +898,20 @@ const parityOf = (p: number[]) => {
  * A cube state drawn uniformly from all 43,252,003,274,489,856,000 reachable
  * ones: random corner and edge arrangements with matching parity, random
  * twists summing to a multiple of 3, random flips summing to a multiple of 2.
+ *
+ * `below(n)` must return a uniformly random integer in [0, n). It defaults to
+ * the cryptographic generator; tests and experiments pass a seeded one so a
+ * run can be repeated.
  */
-export function randomCubie(): Cubie {
-  const cp = randomPermutation(8)
-  const ep = randomPermutation(12)
+export function randomCubie(below: (n: number) => number = randomBelow): Cubie {
+  const cp = randomPermutation(8, below)
+  const ep = randomPermutation(12, below)
   // Corner and edge parity must agree; swapping the last two edges pairs every
   // odd arrangement with exactly one even one, so the result stays uniform.
   if (parityOf(cp) !== parityOf(ep)) [ep[10], ep[11]] = [ep[11], ep[10]]
-  const co = Array.from({ length: 7 }, () => randomBelow(3))
+  const co = Array.from({ length: 7 }, () => below(3))
   co.push((3 - (co.reduce((a, b) => a + b, 0) % 3)) % 3)
-  const eo = Array.from({ length: 11 }, () => randomBelow(2))
+  const eo = Array.from({ length: 11 }, () => below(2))
   eo.push(eo.reduce((a, b) => a + b, 0) % 2)
   return { cp, co, ep, eo }
 }
@@ -918,16 +922,25 @@ export function randomCubie(): Cubie {
  * that random cube. (Same method as official competition scramblers.)
  */
 export function randomScramble(): string {
-  initTwoPhase()
   for (;;) {
     const target = randomCubie()
     if (isSolvedCubie(target)) continue
-    const job = new RefineJob([{ start: target, toReal: (p) => p }])
-    runJob(job, 250)
-    const solution = job.best!
+    const scramble = scrambleFor(target)
     // A random cube needs about 20 turns; a much shorter one is a rare easy
     // cube, so draw again rather than hand out an easy scramble.
-    if (solution.length < 16) continue
-    return invertPath(solution).map(moveName).join(' ')
+    if (scramble.split(' ').length < 16) continue
+    return scramble
   }
+}
+
+/**
+ * Face turns that make `target` from a solved cube ("" if it is solved): solve
+ * it, searching for `timeMs` after the first answer, and play that backwards.
+ * `target` must be a reachable cube: for any other the search may never end.
+ */
+export function scrambleFor(target: Cubie, timeMs = 250): string {
+  initTwoPhase()
+  const job = new RefineJob([{ start: target, toReal: (p) => p }])
+  runJob(job, timeMs)
+  return invertPath(job.best!).map(moveName).join(' ')
 }

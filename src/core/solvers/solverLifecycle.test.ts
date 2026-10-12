@@ -6,15 +6,17 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const mv = (s: string) => ({ alg: new Alg(s), snapAngleDeg: 90 })
 
-type Behaviour = 'crash' | 'silent'
+type Behaviour = 'crash' | 'silent' | 'refuse'
 
 function fakeWorker(behaviour: Behaviour) {
   return class {
     onmessage: ((e: MessageEvent) => void) | null = null
     onerror: (() => void) | null = null
     terminated = false
-    postMessage(): void {
+    postMessage(message: { id: number }): void {
       if (behaviour === 'crash') queueMicrotask(() => this.onerror?.())
+      // 'refuse': the worker is alive but says it could not do what was asked.
+      if (behaviour === 'refuse') queueMicrotask(() => this.onmessage?.({ data: { id: message.id, ok: false, error: 'out of memory' } } as MessageEvent))
       // 'silent': the message is swallowed and nothing ever comes back.
     }
     terminate(): void {
@@ -63,5 +65,21 @@ describe('solver lifecycle', () => {
     await solver.initSolver()
     await solver.retrySolver()
     expect(solver.getSolverStatus()).toBe('fallback')
+  }, 30000)
+
+  it('a worker that cannot build its tables hands over to the main thread, and the reason is kept', async () => {
+    const solver = await freshSolver('refuse')
+    await solver.initSolver()
+    // Not "failed": the main thread has not been tried and found wanting.
+    expect(solver.getSolverStatus()).toBe('fallback')
+    expect(solver.getSolverError()).toContain('out of memory')
+    const { moves } = await solver.solveFromHistory(['R'].map(mv))
+    expect(moves.map((m) => m.alg.toString())).toEqual(["R'"])
+  }, 30000)
+
+  it('a worker lost while still warming up leaves its reason behind too', async () => {
+    const solver = await freshSolver('crash')
+    await solver.initSolver()
+    expect(solver.getSolverError()).toBe('solver worker crashed')
   }, 30000)
 })

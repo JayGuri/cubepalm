@@ -19,7 +19,7 @@ type HandName = 'Left' | 'Right'
  * hand has its thumb on the right (pinky first). So for the left hand, "ring +
  * pinky" lights the two leftmost fingers, matching the player's own hand.
  */
-function PoseIcon({ layer, hand = 'Right', size = 22 }: { layer: SignLayer; hand?: HandName; size?: number }) {
+export function PoseIcon({ layer, hand = 'Right', size = 22 }: { layer: SignLayer; hand?: HandName; size?: number }) {
   const pose = POSE_FOR[layer]
   const color = HAND_COLOR[hand]
   return (

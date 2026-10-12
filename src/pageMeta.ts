@@ -60,6 +60,12 @@ export function pageMeta(pathname: string): PageMeta {
       canonical: at(path),
     }
   }
+  if (path === '/stats') {
+    return { title: 'How you turn the cube | CubePalm', description: 'Your own numbers, kept on your device: how fast and how accurately you turn the cube with each input method.', canonical: at('/stats') }
+  }
+  if (path === '/record') {
+    return { title: 'Record your hand signs | CubePalm', description: 'Record the landmarks of your hands making each sign, to help measure how well CubePalm reads them. No pictures are kept and nothing is sent.', canonical: at('/record') }
+  }
   if (path === '/settings') {
     return { title: 'Settings | CubePalm', description: HOME.description, canonical: at('/settings') }
   }

@@ -261,3 +261,83 @@ describe("the pausable background search", () => {
     }
   }, 60_000)
 })
+
+describe('the random-state generator is uniform', () => {
+  // A repeatable stand-in for the cryptographic source. floor(u * n) favours
+  // some values by about n / 2^32, far too little for these tests to see.
+  const seededBelow = (seed: number) => {
+    const next = rng(seed)
+    return (n: number) => Math.floor(next() * n)
+  }
+  const parity = (p: number[]) => {
+    let n = 0
+    for (let i = 0; i < p.length; i++) for (let j = i + 1; j < p.length; j++) if (p[j] < p[i]) n++
+    return n % 2
+  }
+  // Pearson's statistic against "every outcome equally likely".
+  const chiSquare = (counts: number[]) => {
+    const expected = counts.reduce((a, b) => a + b, 0) / counts.length
+    return counts.reduce((sum, c) => sum + (c - expected) ** 2 / expected, 0)
+  }
+  // 99.9th percentiles of the chi-square distribution, by degrees of freedom
+  // (outcomes - 1). A fair generator exceeds one only once in 1000 seeds, and
+  // the seed here is fixed, so a pass stays a pass.
+  const CRITICAL: Record<number, number> = { 1: 10.828, 2: 13.816, 7: 24.322, 11: 31.264 }
+
+  it('with a seeded source the same seed gives the same cubes, and the default still works', () => {
+    const a = seededBelow(1)
+    const b = seededBelow(1)
+    for (let i = 0; i < 20; i++) expect(randomCubie(a)).toEqual(randomCubie(b))
+    expect(randomCubie().cp).toHaveLength(8)
+  })
+
+  it('every state is reachable: valid permutations, matching parities, twists and flips that add up', () => {
+    const below = seededBelow(2025)
+    for (let i = 0; i < 5000; i++) {
+      const c = randomCubie(below)
+      expect([...c.cp].sort((x, y) => x - y)).toEqual([0, 1, 2, 3, 4, 5, 6, 7])
+      expect([...c.ep].sort((x, y) => x - y)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
+      expect(c.co.every((t) => t >= 0 && t <= 2) && c.eo.every((f) => f === 0 || f === 1)).toBe(true)
+      expect(c.co.reduce((x, y) => x + y, 0) % 3).toBe(0)
+      expect(c.eo.reduce((x, y) => x + y, 0) % 2).toBe(0)
+      expect(parity(c.cp)).toBe(parity(c.ep))
+    }
+  })
+
+  it('passes chi-square tests, including on the values that are computed rather than drawn', () => {
+    const below = seededBelow(7919)
+    const samples = 24_000 // the rarest outcome (1 in 12) is still expected 2000 times
+    const counts: Record<string, number[]> = {
+      'corner in slot 0': new Array<number>(8).fill(0),
+      'edge in slot 0': new Array<number>(12).fill(0),
+      'twist of corner 0': new Array<number>(3).fill(0),
+      'flip of edge 0': new Array<number>(2).fill(0),
+      'permutation parity': new Array<number>(2).fill(0),
+      // The eighth twist and twelfth flip are forced by the others...
+      'twist of corner 7 (computed)': new Array<number>(3).fill(0),
+      'flip of edge 11 (computed)': new Array<number>(2).fill(0),
+      // ...and slots 10 and 11 are the ones the parity fix swaps.
+      'edge in slot 10': new Array<number>(12).fill(0),
+      'edge in slot 11': new Array<number>(12).fill(0),
+    }
+    for (let i = 0; i < samples; i++) {
+      const c = randomCubie(below)
+      counts['corner in slot 0'][c.cp[0]]++
+      counts['edge in slot 0'][c.ep[0]]++
+      counts['twist of corner 0'][c.co[0]]++
+      counts['flip of edge 0'][c.eo[0]]++
+      counts['permutation parity'][parity(c.cp)]++
+      counts['twist of corner 7 (computed)'][c.co[7]]++
+      counts['flip of edge 11 (computed)'][c.eo[11]]++
+      counts['edge in slot 10'][c.ep[10]]++
+      counts['edge in slot 11'][c.ep[11]]++
+    }
+    for (const [name, seen] of Object.entries(counts)) {
+      expect(chiSquare(seen), name).toBeLessThan(CRITICAL[seen.length - 1])
+    }
+  })
+
+  it('the statistic can fail: plainly uneven counts are over the critical value', () => {
+    expect(chiSquare([1300, 1000, 700])).toBeGreaterThan(CRITICAL[2])
+  })
+})

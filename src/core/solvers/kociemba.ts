@@ -34,6 +34,8 @@ export function subscribeSolverStatus(listener: () => void): () => void {
 }
 
 let worker: Worker | null = null
+// Why the worker was given up on, if it was: shown beside the `fallback` state.
+let lostReason: string | null = null
 // Set when the worker never came up; everything then runs on the main thread.
 let workerDisabled = false
 let nextId = 1
@@ -54,6 +56,7 @@ function abandonWorker(reason: string): void {
   for (const [, entry] of pending) entry.reject(new Error(reason))
   pending.clear()
   releaseSolverPool(true)
+  lostReason = reason
   if (status === 'ready') setStatus('fallback', reason)
 }
 
@@ -117,7 +120,10 @@ async function ask(request: Request): Promise<SolverResponse> {
       w.postMessage({ ...request, id } as SolverRequest)
     })
   } catch (e) {
-    // The solver itself rejecting the question is a real error; a lost worker is not.
+    // The solver itself rejecting a question is a real error; a lost worker is
+    // not, and nor is a worker that could not build its tables: the main thread
+    // gets its own try before anything is called failed.
+    if (!workerDisabled && request.type === 'init') abandonWorker(`solver worker could not start: ${(e as Error).message}`)
     if (!workerDisabled) throw e
     return answerInline(request)
   } finally {
@@ -139,7 +145,7 @@ export function initSolver(): Promise<void> {
   starting = (async () => {
     try {
       await ask({ type: 'init' })
-      setStatus(worker && !workerDisabled ? 'ready' : 'fallback', worker ? null : statusError)
+      setStatus(worker && !workerDisabled ? 'ready' : 'fallback', worker && !workerDisabled ? null : lostReason)
     } catch (e) {
       setStatus('failed', (e as Error).message)
       starting = null
@@ -153,6 +159,7 @@ export function initSolver(): Promise<void> {
 export function retrySolver(): Promise<void> {
   workerDisabled = false
   poolDisabled = false
+  lostReason = null
   starting = null
   return initSolver()
 }
@@ -167,14 +174,12 @@ export interface Solution {
  * How hard to look.
  *   quick     -- a good answer at once (the guide's first route).
  *   normal    -- Solve for me.
- *   thorough  -- background refinement while you follow the guide.
  */
-export type SolveEffort = 'quick' | 'normal' | 'thorough'
+export type SolveEffort = 'quick' | 'normal'
 
 const EFFORT: Record<SolveEffort, SolveOptions> = {
   quick: { timeMs: 400, proveMs: 300 },
   normal: { timeMs: 3000, proveMs: 1000 },
-  thorough: { timeMs: 6000, proveMs: 3000 },
 }
 
 const toMoves = (alg: Alg, snapAngleDeg: number): Move[] =>
@@ -215,8 +220,10 @@ export async function solveFromHistory(
 // Background refinement is spread over a few extra workers, each owning some of
 // the six views, so it uses several CPU cores at once. They are created the
 // first time a search is asked for, and let go when the play screen closes. The
-// pool never takes more than half the cores, and at most four.
+// pool leaves two cores for the page and takes at most three (see poolSize).
 const POOL_SEARCH = new Map<number, (index: number, step: RefineStep) => void>()
+// How to tell each running search it is over, for when its helpers are taken away.
+const POOL_ENDED = new Map<number, () => void>()
 let pool: Worker[] = []
 let poolDisabled = false
 
@@ -255,8 +262,13 @@ function ensurePool(): Worker[] {
 export function releaseSolverPool(failed = false): void {
   for (const w of pool) w.terminate()
   pool = []
+  // A search that loses its helpers has ended; say so, or whoever started it
+  // would wait for a result that can no longer come.
+  const ended = [...POOL_ENDED.values()]
   POOL_SEARCH.clear()
+  POOL_ENDED.clear()
   if (failed) poolDisabled = true
+  for (const end of ended) end()
 }
 
 /** One answer from a background search. */
@@ -301,6 +313,7 @@ export function refineFromHistory(
     let over = false
     const stopAll = () => {
       POOL_SEARCH.delete(id)
+      POOL_ENDED.delete(id)
       for (const h of helpers) h.postMessage({ id, type: 'cancel' } satisfies SolverRequest)
     }
     POOL_SEARCH.set(id, (index, step) => {
@@ -321,6 +334,11 @@ export function refineFromHistory(
         onUpdate({ moves: null, done: true, optimal: false })
         stopAll()
       }
+    })
+    POOL_ENDED.set(id, () => {
+      if (over) return
+      over = true
+      onUpdate({ moves: null, done: true, optimal: false })
     })
     helpers.forEach((h, index) =>
       h.postMessage({ id, type: 'refine', scramble, bound, slice: { index, count: helpers.length } } satisfies SolverRequest),
@@ -398,8 +416,9 @@ function remember(scramble: string, recent: string[]): void {
 /**
  * A fresh random-state scramble: a uniformly random cube (one of 43
  * quintillion), drawn with the browser's cryptographic random generator.
- * It is also checked against the last 200 scrambles on this device, so a
- * repeat cannot slip through even by chance.
+ * It is also checked against the last 200 scrambles on this device and drawn
+ * again on a match (up to five times), which makes a repeat vanishingly
+ * unlikely rather than impossible.
  */
 export async function newScramble(snapAngleDeg = 90): Promise<Move[]> {
   const recent = recentScrambles()

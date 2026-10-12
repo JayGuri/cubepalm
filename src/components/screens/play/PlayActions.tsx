@@ -9,6 +9,7 @@ export function PlayActions({
   guideActive,
   solveActive,
   canUndo,
+  solverDown,
   canReset,
   ranked,
   onCustom,
@@ -33,6 +34,8 @@ export function PlayActions({
   /** A solution is being found or played, so "Solve for me" is not offered. */
   solveActive: boolean
   canUndo: boolean
+  /** The solver could not start: a random scramble, the guide and Solve for me all need it. */
+  solverDown: boolean
   /** There are moves to drop: the cube is not already at its starting position. */
   canReset: boolean
   /** A random scramble (which can set a best time), not one the player chose. */
@@ -68,7 +71,7 @@ export function PlayActions({
     <footer className="flex shrink-0 flex-wrap items-center gap-1.5 border-t border-white/[0.07] px-3 py-2.5 sm:gap-3 sm:px-6 sm:py-3">
       {/* One control in two halves: a random scramble, or one you choose. */}
       <div className="flex">
-        <button type="button" className={`${PRIMARY} rounded-r-none pr-3 sm:pr-4`} onClick={onScramble} disabled={busy}>
+        <button type="button" className={`${PRIMARY} rounded-r-none pr-3 sm:pr-4`} onClick={onScramble} disabled={busy || solverDown}>
           Scramble
         </button>
         <button
@@ -138,13 +141,13 @@ export function PlayActions({
           title="Shows the next move to make, one step at a time"
           className={`${BUTTON} border-[#F5B83D]/60 text-[#F5B83D] hover:border-[#F5B83D]`}
           onClick={onGuide}
-          disabled={busy}
+          disabled={busy || solverDown}
         >
           <span className="sm:hidden">Guide</span>
           <span className="max-sm:hidden">Guide me</span>
         </button>
       )}
-      <button type="button" className={BUTTON} title="Plays the whole solution for you" onClick={onSolve} disabled={busy || solved || solveActive}>
+      <button type="button" className={BUTTON} title="Plays the whole solution for you" onClick={onSolve} disabled={busy || solved || solveActive || solverDown}>
         <span className="sm:hidden">Solve</span>
         <span className="max-sm:hidden">Solve for me</span>
       </button>

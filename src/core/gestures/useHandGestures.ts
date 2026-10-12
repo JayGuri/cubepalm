@@ -122,6 +122,8 @@ export function useHandGestures(options: UseHandGesturesOptions): UseHandGesture
       cancelled = true
       setReady(false)
       setTracker(null)
+      // The next attempt starts clean: this one's error is not its error.
+      setError(null)
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
       stopCamera(streamRef.current)
       streamRef.current = null
@@ -183,7 +185,11 @@ export function useHandGestures(options: UseHandGesturesOptions): UseHandGesture
           costMs = costMs === 0 ? performance.now() - now : costMs * 0.8 + (performance.now() - now) * 0.2
           if (alive && f) processFrameRef.current(f)
         })
-        .catch(() => undefined)
+        .catch((e) => {
+          // The tracker itself has gone (not one bad frame): stop asking and say so.
+          if (alive) setError((e as Error).message)
+          trackerRef.current = null
+        })
         .finally(() => {
           busy = false
         })

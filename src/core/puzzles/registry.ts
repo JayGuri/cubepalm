@@ -1,8 +1,8 @@
 import type { PuzzleId, PuzzlePlugin } from './PuzzlePlugin'
 
-// The app is focused on the 3x3 alone for now; the other puzzles and the
-// Academy were removed rather than hidden, so nothing dead ships. The
-// registry shape is kept so a puzzle can be re-added without touching callers.
+// Two puzzles ship: the 3x3 and the Mirror Cube. Each is loaded on demand, and
+// the registry is the one place that lists them, so adding a puzzle touches
+// nothing else.
 export const PUZZLE_REGISTRY: Record<PuzzleId, () => Promise<PuzzlePlugin>> = {
   cube3: async () => (await import('./cube3')).createCube3Plugin(),
   mirror: async () => (await import('./mirror')).createMirrorPlugin(),
