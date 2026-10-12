@@ -46,7 +46,7 @@ Full tables: [sign-recognition.md](research/sign-recognition.md), [temporal-filt
 
 - The grace period for a lost hand is on for everyone. It is a change to the logic over time, not to how a frame is read, and it does not depend on the hand model being right.
 - Square pixels, the dead-zone reader and smoothing are offered together as **Settings > Sign reading > Precise**. The original rule stays the default, because it was tuned with a real camera and the alternative has so far been measured only on a model.
-- A recorder at `/record` saves the landmarks of real hands making prompted signs (coordinates only, never pictures). The study scores every reader on any recordings placed in `research/recordings/`. That is the experiment that would settle the default, and it has not been run: see section 6.
+- The study can score every reader on recordings of real hands (landmark coordinates only, never pictures) placed in `research/recordings/`; the file format is in [`recording.ts`](../src/core/gestures/recording.ts). That is the experiment that would settle the default, and it has not been run: see section 6.
 
 ## 4. Solving the cube
 
@@ -74,7 +74,7 @@ The algorithm and its proofs are in [MATH.md](MATH.md). Measurements: [solver.md
 
 ## 6. Limits, and what would come next
 
-- **No measurement on people yet.** Section 3's numbers describe the readers on a model. The recorder and the scoring code exist; the recordings do not. [STUDY.md](STUDY.md) is the protocol for collecting them, and for comparing the four input methods using the on-device log shown at `/stats`.
+- **No measurement on people yet.** Section 3's numbers describe the readers on a model. The scoring code and the recording format exist; the recordings do not. Collecting them from several people, and comparing the four input methods on the same people, is the next step and is not part of this release.
 - **The hand model is simple.** It would be worth replacing its hand-chosen proportions with measured ones once recordings exist, and checking whether the model then predicts the readers' behaviour on real hands.
 - **Optimality is out of reach for a random cube in a browser.** Routes average about 24.7 quarter turns after five seconds; the proof search finishes only close to solved.
 - **The benchmark is one machine, one thread, in Node.** The browser runs the same code but spreads the search over several workers.

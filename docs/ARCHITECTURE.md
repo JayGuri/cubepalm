@@ -179,8 +179,6 @@ How a pose is read from one frame is a replaceable function (a `PoseReader`, in 
 
 In both, a hand the tracker fails to report for up to `dropGraceMs` (240 ms) changes nothing: the vote and the hold carry on when it returns, and no turn is made on a frame with no hand in it. The measurements behind these choices are in [research/sign-recognition.md](research/sign-recognition.md) and [research/temporal-filtering.md](research/temporal-filtering.md).
 
-Two more screens use the same camera path. `/record` ([Recorder.tsx](../src/components/screens/Recorder.tsx)) subscribes to the feed and saves landmark frames with the label of the sign the person was asked to make. `/stats` ([Stats.tsx](../src/components/screens/Stats.tsx)) summarises the usage log.
-
 ## 4. The move queue and the start of an attempt
 
 ### 4.1 One queue for every turn
@@ -324,8 +322,6 @@ Every read and write is inside `try`/`catch`. If storage is blocked or full the 
 `best.v1` stores the lowest time and the lowest move count separately, so the two numbers may come from different attempts ([useSolveSession.ts]).
 
 The service worker also keeps a Cache Storage cache named `cubepalm-gesture-assets` for the MediaPipe files ([vite.config.ts]).
-
-A fourth key, `cubepalm.usage.v1`, holds the usage log: a JSON array of turn, undo and solve events with the input method that made each ([usageLog.ts](../src/state/usageLog.ts)). It is capped at 8,000 events, validated on load, written in batches and when the page is hidden, and never sent anywhere.
 
 ### 7.3 One-time migration
 

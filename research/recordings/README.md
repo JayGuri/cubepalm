@@ -1,6 +1,7 @@
 # Recordings of real hands
 
-Put files downloaded from the `/record` page here, then run `npm run research`.
+Put hand-recording files here (the format is in
+`src/core/gestures/recording.ts`), then run `npm run research`.
 The recognition study scores every reader on them and adds a section to
 `docs/research/sign-recognition.md`.
 

@@ -10,8 +10,6 @@ import type { SolverStatus } from './core/solvers/kociemba'
 // (~1.5 MB); the home page needs none of it, so each screen loads on demand.
 const FreePlay = lazy(() => import('./components/screens/FreePlay').then((m) => ({ default: m.FreePlay })))
 const Academy = lazy(() => import('./components/screens/Academy').then((m) => ({ default: m.Academy })))
-const Stats = lazy(() => import('./components/screens/Stats').then((m) => ({ default: m.Stats })))
-const Recorder = lazy(() => import('./components/screens/Recorder').then((m) => ({ default: m.Recorder })))
 const Settings = lazy(() => import('./components/screens/Settings').then((m) => ({ default: m.Settings })))
 
 // Keyed by puzzle so switching cubes starts a fresh session (counters, timer, best).
@@ -72,8 +70,6 @@ function App() {
           <Route path="/learn" element={<Academy />} />
           <Route path="/learn/:lessonId" element={<LessonRoute />} />
           <Route path="/settings" element={<Settings />} />
-          <Route path="/stats" element={<Stats />} />
-          <Route path="/record" element={<Recorder />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         </Suspense>

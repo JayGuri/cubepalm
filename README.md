@@ -38,8 +38,6 @@ The parts of this project that could be measured have been, by scripts in the re
 | Why can the answers be trusted? | Six claims with proofs: the bounds never over-estimate, the search is complete, the scramble generator is uniform. | [MATH.md](docs/MATH.md#why-the-answers-can-be-trusted) |
 | How is it put together? | Threads, message protocols, failure paths, storage. | [ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 
-If you have ten minutes and a webcam, you can help measure it on real hands: [STUDY.md](docs/STUDY.md).
-
 ## What is new here
 
 Hand-controlled cube demos usually do one thing: a pinch or a swipe turns a face, on a single 3×3, with a solver library bolted on. CubePalm goes further.

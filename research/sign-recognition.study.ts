@@ -350,7 +350,7 @@ it('sign recognition study', () => {
   const share = (count: number, of: number) => (of === 0 ? 'n/a' : percent(count / of))
   const recordedSection =
     recorded.samples.length === 0
-      ? 'No recordings yet. Put files made at `/record` into `research/recordings/` and run the study again; this section then reports the same readers on real hands. Every claim above stays a claim about the model until it does.'
+      ? 'No recordings yet. Put recording files (the format is in `src/core/gestures/recording.ts`) into `research/recordings/` and run the study again; this section then reports the same readers on real hands. Every claim above stays a claim about the model until it does.'
       : [
           `${recorded.files} recording file(s), ${recorded.samples.length} frames with the asked-for hand in view (${signFrames.length} of a sign, ${relaxedFrames.length} of a relaxed hand). The fitted readers were fitted on model hands only, so every frame here is unseen.`,
           '',
@@ -459,7 +459,7 @@ it('sign recognition study', () => {
           '- It shows how sensitive each reader is to each thing that varies, because here the true pose is known and everything else can be held still. That cannot be done with a camera.',
           '- It does not show accuracy on people. The hands are a model: rigid bones, joints that bend in one plane, jitter that is independent from landmark to landmark. Real tracking errors are not like that (a hidden finger is guessed, not jittered), and the proportions of the model hand were chosen by eye.',
           '- The two fitted readers were fitted on hands from the same model they are scored on. Beating the shipped rule here is a reason to test them on recordings of real hands, not proof that they are better on real hands.',
-          '- Recordings made with the recorder at `/record` can be scored by the same code. Until some exist, treat every number here as a property of the readers, not of the app in use.',
+          '- Recordings of real hands can be scored by the same code. Until some exist, treat every number here as a property of the readers, not of the app in use.',
         ].join('\n'),
       },
     ],
