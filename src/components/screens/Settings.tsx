@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useAcademyStore } from '../../state/academyStore'
 import { useSettingsStore, type SignReading, type TurnSpeed } from '../../state/settingsStore'
 import { SiteNav } from '../SiteNav'
@@ -95,6 +96,18 @@ export function Settings() {
               <option value="normal">Normal</option>
               <option value="fast">Fast</option>
             </select>
+          </Row>
+
+          <Row label="Your numbers" description="How fast and how accurately you turn the cube with each input method. Kept on this device.">
+            <Link to="/stats" data-testid="open-stats" className="shrink-0 rounded-full border border-white/15 px-4 py-1.5 text-sm font-medium hover:border-white/40">
+              Open
+            </Link>
+          </Row>
+
+          <Row label="Help measure hand tracking" description="Record your hands making each sign. Only the positions of points on your hands are kept, never a picture, and nothing is sent.">
+            <Link to="/record" data-testid="open-record" className="shrink-0 rounded-full border border-white/15 px-4 py-1.5 text-sm font-medium hover:border-white/40">
+              Record
+            </Link>
           </Row>
 
           <Row

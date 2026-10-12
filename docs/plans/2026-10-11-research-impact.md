@@ -166,10 +166,6 @@ Two tasks a friend can do in ten minutes without help: (1) open `/record`, follo
 
 ---
 
-## Held back
-
-At the owner's request the pieces for collecting data from other people (Tasks B1 to B3's screens and usage log, and F1's guide) are not in the published repository yet. They are finished and kept on a local branch, `study-pieces`. The recording format (`recording.ts`) and the scoring code stay, since the recognition study uses them.
-
 ## Order and parallelism
 
 - Independent, started together: A1 to A3, C1, D1 to D3.
