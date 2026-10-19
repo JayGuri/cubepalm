@@ -53,7 +53,7 @@ function LogoMark({ size = 36 }: { size?: number }) {
 
 export function Logo({ to = '/', size = 36, iconOnlyOnPhone = false }: { to?: string; size?: number; iconOnlyOnPhone?: boolean }) {
   return (
-    <Link to={to} className="group inline-flex items-center gap-3" aria-label="CubePalm, home">
+    <Link to={to} className="group inline-flex items-center gap-3 pointer-coarse:min-h-11 pointer-coarse:min-w-11" aria-label="CubePalm, home">
       <span className="transition-transform duration-300 group-hover:-rotate-12 group-hover:scale-110">
         <LogoMark size={size} />
       </span>

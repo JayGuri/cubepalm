@@ -38,6 +38,9 @@ export function SignPlayground() {
   // The sign that has already turned; changing the sign (or hand) allows another turn.
   const [firedKey, setFiredKey] = useState('')
   const [turns, setTurns] = useState(0)
+  // Nothing turns until the visitor touches the demo: the starting pose is
+  // only there to show what a sign looks like.
+  const [armed, setArmed] = useState(false)
 
   const layer = layerFor(raised)
   const color = HAND_COLOR[hand]
@@ -48,7 +51,7 @@ export function SignPlayground() {
 
   useEffect(() => {
     cube.current?.highlight(layer)
-    if (!layer || fired) return
+    if (!armed || !layer || fired) return
     const start = performance.now()
     let raf = 0
     const tick = (now: number) => {
@@ -64,14 +67,24 @@ export function SignPlayground() {
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [layer, hand, fired, key])
+  }, [layer, hand, fired, key, armed])
 
   const order = hand === 'Right' ? [0, 1, 2, 3] : [3, 2, 1, 0]
-  const toggle = (finger: number) => setRaised((r) => r.map((v, i) => (i === finger ? !v : v)))
-  const setSign = (l: SignLayer) => setRaised(POSE_FOR[l].split('').map((c) => c === '1'))
+  const toggle = (finger: number) => {
+    setArmed(true)
+    setRaised((r) => r.map((v, i) => (i === finger ? !v : v)))
+  }
+  const setSign = (l: SignLayer) => {
+    setArmed(true)
+    setRaised(POSE_FOR[l].split('').map((c) => c === '1'))
+  }
+  const pickHand = (h: Hand) => {
+    setArmed(true)
+    setHand(h)
+  }
 
   return (
-    <div className="grid items-center gap-10 md:grid-cols-[1fr_1fr]">
+    <div className="grid items-center gap-8 md:grid-cols-[1fr_1fr] md:gap-10">
       <div>
         <div role="group" aria-label="Which hand" className="inline-flex rounded-full bg-black/30 p-1 text-sm">
           {(['Left', 'Right'] as Hand[]).map((h) => (
@@ -80,8 +93,8 @@ export function SignPlayground() {
               type="button"
               aria-pressed={hand === h}
               data-testid={`sign-hand-${h.toLowerCase()}`}
-              onClick={() => setHand(h)}
-              className={`rounded-full px-4 py-1.5 font-medium transition ${hand === h ? 'text-[#16171B]' : 'text-[#9C9AA3] hover:text-[#ECEAE4]'}`}
+              onClick={() => pickHand(h)}
+              className={`min-h-10 rounded-full px-4 font-semibold transition pointer-coarse:min-h-11 ${hand === h ? 'text-[#16171B]' : 'text-[#9C9AA3] hover:text-[#ECEAE4]'}`}
               style={hand === h ? { background: HAND_COLOR[h] } : undefined}
             >
               {h} hand
@@ -89,7 +102,7 @@ export function SignPlayground() {
           ))}
         </div>
 
-        <div className="relative mt-6 flex h-72 w-72 max-w-full items-end justify-center">
+        <div className="relative mx-auto mt-6 flex h-64 w-60 items-end justify-center sm:mx-0 sm:h-72 sm:w-72">
           {/* thumb */}
           <span
             aria-hidden
@@ -97,8 +110,8 @@ export function SignPlayground() {
             style={{ [hand === 'Right' ? 'left' : 'right']: '0.4rem', transform: `rotate(${hand === 'Right' ? -38 : 38}deg)` }}
           />
           {/* palm */}
-          <span aria-hidden className="absolute bottom-0 h-28 w-60 rounded-[2rem] bg-[#2C2E34]" />
-          <div className="relative flex items-end gap-2.5 pb-16">
+          <span aria-hidden className="absolute bottom-0 h-28 w-52 rounded-[2rem] bg-[#2C2E34] sm:w-60" />
+          <div className="relative flex items-end gap-2 pb-16 sm:gap-2.5">
             {order.map((f) => {
               const up = raised[f]
               return (
@@ -109,14 +122,14 @@ export function SignPlayground() {
                   aria-pressed={up}
                   aria-label={`${FINGERS[f]} finger`}
                   onClick={() => toggle(f)}
-                  className="w-12 rounded-full transition-all duration-300 ease-[cubic-bezier(.3,1.5,.5,1)] hover:brightness-110 focus-visible:outline-2"
-                  style={{ height: up ? 150 + (f === 1 ? 14 : f === 3 ? -24 : 0) : 46, background: up ? color : '#4B4D55' }}
+                  className="w-11 rounded-full transition-all duration-300 ease-[cubic-bezier(.3,1.5,.5,1)] hover:brightness-110 sm:w-12"
+                  style={{ height: up ? 140 + (f === 1 ? 14 : f === 3 ? -24 : 0) : 46, background: up ? color : '#4B4D55' }}
                 />
               )
             })}
           </div>
           {/* hold ring */}
-          <svg className="absolute bottom-4 right-3" width="52" height="52" viewBox="0 0 52 52" aria-hidden>
+          <svg className="absolute bottom-4 right-1 sm:right-3" width="52" height="52" viewBox="0 0 52 52" aria-hidden>
             <circle cx="26" cy="26" r="21" fill="none" stroke="#ffffff1f" strokeWidth="5" />
             <circle
               cx="26"
@@ -124,6 +137,7 @@ export function SignPlayground() {
               r="21"
               fill="none"
               stroke={fired ? '#22C55E' : color}
+              strokeOpacity={fired || progress > 0 ? 1 : 0}
               strokeWidth="5"
               strokeLinecap="round"
               strokeDasharray={`${(fired ? 1 : progress) * 132} 132`}
@@ -132,14 +146,19 @@ export function SignPlayground() {
           </svg>
         </div>
 
-        <p className="mt-4 min-h-[3.25rem] text-[#C9C7CF]" data-testid="sign-readout" aria-live="polite">
+        <p className="mt-5 flex min-h-[3.25rem] items-baseline gap-3 text-[#C9C7CF]" data-testid="sign-readout" aria-live="polite">
           {layer ? (
             <>
-              <span className="font-display text-2xl font-bold" style={{ color }}>
+              {/* Keyed on the turn count so it pops once each time a layer turns. */}
+              <span key={turns} className={`font-display text-2xl font-bold ${turns ? 'sign-pop' : ''}`} style={{ color }}>
                 {notationFor(layer, hand)}
               </span>
-              <span className="ml-3">
-                {fired ? 'Done. Change your fingers to turn again.' : `${LAYER_NAME[layer]}, ${hand === 'Right' ? 'clockwise' : 'counter-clockwise'}. Hold still…`}
+              <span>
+                {!armed
+                  ? 'Tap a finger, or pick a sign, then hold it.'
+                  : fired
+                    ? 'Turned. Change your fingers to turn again.'
+                    : `${LAYER_NAME[layer]}, ${hand === 'Right' ? 'clockwise' : 'counter-clockwise'}. Hold still…`}
               </span>
             </>
           ) : (
@@ -148,11 +167,14 @@ export function SignPlayground() {
         </p>
       </div>
 
-      <div className="flex flex-col items-center gap-8">
-        <div className="grid h-72 w-full place-items-center">
-          <CssCube ref={cube} cubie={58} />
+      <div className="flex flex-col items-center gap-6 md:gap-8">
+        <div className="grid h-60 w-full place-items-center sm:h-72">
+          <div className="scale-[0.85] sm:scale-100">
+            <CssCube ref={cube} cubie={58} />
+          </div>
         </div>
-        <ul aria-label="All signs" className="grid w-full grid-cols-9 gap-1.5">
+        {/* Three to a row on a phone (R U F / L D B / M E S), one row from 640 px. */}
+        <ul aria-label="All signs" className="grid w-full grid-cols-3 gap-1.5 sm:grid-cols-9">
           {LAYERS.map((l) => (
             <li key={l}>
               <button
@@ -160,7 +182,7 @@ export function SignPlayground() {
                 data-testid={`sign-${l}`}
                 aria-label={`${l}: ${LAYER_NAME[l]}`}
                 onClick={() => setSign(l)}
-                className={`flex w-full flex-col items-center gap-1 rounded-lg border py-1.5 transition ${layer === l ? 'bg-white/10' : 'border-white/10 hover:border-white/30'}`}
+                className={`flex min-h-11 w-full flex-col items-center justify-center gap-1 rounded-lg border py-1.5 transition ${layer === l ? 'bg-white/10' : 'border-white/10 hover:border-white/30'}`}
                 style={layer === l ? { borderColor: color } : undefined}
               >
                 <span className="flex h-5 items-end gap-0.5" aria-hidden>
@@ -172,7 +194,7 @@ export function SignPlayground() {
                     />
                   ))}
                 </span>
-                <span className="font-mono text-xs text-[#ECEAE4]">{l}</span>
+                <span className="font-mono text-sm text-[#ECEAE4]">{l}</span>
               </button>
             </li>
           ))}

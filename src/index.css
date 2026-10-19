@@ -45,6 +45,8 @@ html {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
+    /* A loop cut to 0.01ms would flicker through every frame; play it once and stop. */
+    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
 }
@@ -114,6 +116,31 @@ html {
   0% { transform: rotateX(-26deg) rotateY(-34deg) translateY(0); }
   50% { transform: rotateX(-32deg) rotateY(146deg) translateY(-10px); }
   100% { transform: rotateX(-26deg) rotateY(326deg) translateY(0); }
+}
+
+/* Home, first load only: the lines under the headline rise in, one after
+   another. The headline itself is drawn at once, so the page never looks empty. */
+.hero-in {
+  animation: hero-in 700ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation-delay: var(--d, 0ms);
+}
+@keyframes hero-in {
+  from { opacity: 0; transform: translateY(14px); }
+}
+/* The global rule shortens the animation but not its delay; skip it outright. */
+@media (prefers-reduced-motion: reduce) {
+  .hero-in { animation: none; }
+}
+
+/* The sign demo: the move letter pops when its layer turns. */
+.sign-pop {
+  animation: sign-pop 420ms cubic-bezier(0.3, 1.6, 0.5, 1);
+  display: inline-block;
+}
+@keyframes sign-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.35); }
+  100% { transform: scale(1); }
 }
 
 /* A solved cube: stickers scatter from the middle of the stage and fade. */

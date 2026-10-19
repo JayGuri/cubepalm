@@ -14,14 +14,16 @@ const TILES = [
   { label: 'Source', to: GITHUB, colour: '#FFD500' },
 ] as const
 
+// Phones get 44 px tiles (three to a row under 400 px, so "Settings" fits);
+// from 640 px they shrink to pills, unless the screen is a touch screen.
 const TILE =
-  'grid place-items-center rounded-xl px-0.5 py-2 text-center text-[0.66rem] min-[400px]:px-1 min-[400px]:text-[0.72rem] font-bold leading-none text-[#10131A] shadow-[inset_0_-3px_0_rgba(0,0,0,0.18)] transition duration-200 hover:-translate-y-1 hover:shadow-[inset_0_-3px_0_rgba(0,0,0,0.18),0_10px_20px_-8px_var(--tile)] focus-visible:-translate-y-1 sm:min-w-[4.6rem] sm:rounded-2xl sm:px-3.5 sm:py-2.5 sm:text-sm'
+  'grid min-h-11 place-items-center rounded-xl px-1 text-center text-[0.8rem] font-bold leading-none text-[#10131A] shadow-[inset_0_-3px_0_rgba(0,0,0,0.18)] transition duration-200 hover:-translate-y-1 hover:shadow-[inset_0_-3px_0_rgba(0,0,0,0.18),0_10px_20px_-8px_var(--tile)] focus-visible:-translate-y-1 min-[400px]:text-[0.74rem] sm:min-h-10 sm:min-w-[4.6rem] sm:rounded-2xl sm:px-3.5 sm:text-sm pointer-coarse:min-h-11'
 
 export function SiteNav({ size = 44 }: { size?: number }) {
   return (
     <nav aria-label="Main" className="flex flex-wrap items-center justify-between gap-x-6 gap-y-4">
       <Logo size={size} />
-      <ul className="grid w-full grid-cols-6 gap-1.5 sm:flex sm:w-auto sm:gap-2">
+      <ul className="grid w-full grid-cols-3 gap-1.5 min-[400px]:grid-cols-6 sm:flex sm:w-auto sm:gap-2">
         {TILES.map((t) => {
           const style = { background: t.colour, '--tile': t.colour } as React.CSSProperties
           return (
