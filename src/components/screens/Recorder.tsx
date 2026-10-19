@@ -120,6 +120,15 @@ export function Recorder() {
   })
   const share = () => void navigator.share({ files: [shareFile()], title: 'CubePalm hand recording' }).catch(() => undefined)
 
+  // Once started, bring the camera and the prompt to the top of the screen so a
+  // propped-up phone shows both without anyone touching it.
+  const stepRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (started) stepRef.current?.scrollIntoView({ block: 'start' })
+  }, [started])
+
+  const recordingNow = phase === 'recording' && gestures.ready
+
   return (
     <main className="min-h-dvh bg-[#16171B] px-4 py-8 text-[#ECEAE4] sm:px-6 sm:py-12">
       <div className="mx-auto max-w-2xl">
@@ -128,19 +137,26 @@ export function Recorder() {
 
         {!started && (
           <>
-            <p className="mt-3 text-[#9C9AA3]">
+            <p className="mt-3 text-[#B2B0B9]">
               This helps measure how well CubePalm reads hands. You will be shown {STEPS.length} hand shapes, {CLIP_LABELS.length} for
               each hand, and asked to hold each for a few seconds. It takes about {Math.round((STEPS.length * (READY_MS + RECORD_MS)) / 60_000)} minutes.
             </p>
-            <ul className="mt-5 list-disc space-y-1.5 pl-5 text-sm text-[#B2B0B9]">
-              <li>What is kept: the positions of 21 points on each hand, about 25 times a second, the three answers below, and the size of the camera's picture.</li>
-              <li>What is not kept: any picture or video. Nothing that shows your face, your room or who you are.</li>
-              <li>Nothing is sent. At the end you get a file, and it is yours to send or delete.</li>
-            </ul>
 
-            <fieldset className="mt-8">
+            <section className="mt-6 rounded-2xl border border-white/10 bg-[#202227] p-4 sm:p-5" aria-labelledby="record-kept">
+              <h2 id="record-kept" className="font-display text-lg font-bold">
+                What is kept, and what is not
+              </h2>
+              <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-[#B2B0B9]">
+                <li>What is kept: the positions of 21 points on each hand, about 25 times a second, the three answers below, and the size of the camera's picture.</li>
+                <li>What is not kept: any picture or video. Nothing that shows your face, your room or who you are.</li>
+                <li>Nothing is sent. At the end you get a file, and it is yours to send or delete.</li>
+              </ul>
+            </section>
+
+            <h2 className="font-display mt-8 text-lg font-bold">Three quick questions</h2>
+            <fieldset className="mt-3">
               <legend className="font-medium">The light where you are</legend>
-              <div className="mt-2 flex gap-2">
+              <div className="mt-2 flex flex-wrap gap-2">
                 {(['bright', 'dim'] as const).map((v) => (
                   <Choice key={v} on={conditions.lighting === v} onClick={() => setConditions((c) => ({ ...c, lighting: v }))}>
                     {v === 'bright' ? 'Bright' : 'Dim'}
@@ -177,71 +193,121 @@ export function Recorder() {
             <button
               type="button"
               data-testid="record-start"
-              className="mt-8 rounded-full bg-[#FFD500] px-7 py-3 font-semibold text-[#16171B] hover:bg-[#FFE04D]"
+              className="mt-8 min-h-12 w-full rounded-full bg-[#FFD500] px-7 font-semibold text-[#16171B] hover:bg-[#FFE04D] sm:w-auto"
               onClick={() => setStarted(true)}
             >
               I agree, start recording
             </button>
+            <p className="mt-3 text-sm text-[#9C9AA3]">Your browser will ask to use the camera. The picture itself stays on this device.</p>
           </>
         )}
 
         {started && !done && (
-          <div className="mt-8" data-testid="record-step">
-            {/* The preview takes the camera's own shape (tall on a phone held upright), so the
-                skeleton drawn over it lines up, and never more than about half the screen's height. */}
+          <div ref={stepRef} className="mt-8 scroll-mt-4" data-testid="record-step">
+            <p className="sr-only" aria-live="polite">
+              {gestures.ready && `Shape ${index + 1}, ${step.hand.toLowerCase()} hand. ${phase === 'recording' ? 'Recording, hold still.' : 'Get ready.'}`}
+            </p>
+            {/* How far through: a count and a thin bar across all the shapes. */}
+            <div className="flex items-baseline justify-between gap-3 text-sm">
+              <p className="text-[#B2B0B9]">
+                Shape <b className="tabular-nums text-[#ECEAE4]">{index + 1}</b> of {STEPS.length}
+              </p>
+              <p className="font-semibold" style={{ color: HAND_COLOR[step.hand] }}>
+                {step.hand} hand
+              </p>
+            </div>
             <div
-              className="relative mx-auto max-h-[52dvh] w-full overflow-hidden rounded-2xl border border-white/10 bg-black"
+              role="progressbar"
+              aria-label="Shapes recorded"
+              aria-valuemin={0}
+              aria-valuemax={STEPS.length}
+              aria-valuenow={index}
+              className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10"
+            >
+              <div className="h-full rounded-full bg-[#FFD500] transition-[width] duration-300" style={{ width: `${(index / STEPS.length) * 100}%` }} />
+            </div>
+
+            {/* The preview takes the camera's own shape (tall on a phone held upright), so the
+                skeleton drawn over it lines up, and never more than about half the screen's height.
+                Its frame turns red while recording. */}
+            <div
+              className={`relative mx-auto mt-4 max-h-[52dvh] w-full overflow-hidden rounded-2xl border-2 bg-black transition-colors ${recordingNow ? 'border-[#F0566B]' : 'border-white/10'}`}
               style={{ aspectRatio: camera ? `${camera.width} / ${camera.height}` : '16 / 9', maxWidth: camera ? `calc(52dvh * ${camera.width / camera.height})` : undefined }}
             >
               {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
               <video ref={gestures.videoRef} className="h-full w-full -scale-x-100 object-cover" playsInline muted />
               <CameraDebugOverlay feed={gestures.feed} width={640} height={360} />
-              {!gestures.ready && !gestures.error && (
-                <p className="absolute inset-0 grid place-items-center text-sm text-[#9C9AA3]">Starting the camera. Allow it if your browser asks.</p>
+              {!gestures.ready && (
+                <p className="absolute inset-0 grid place-items-center p-4 text-center text-sm text-[#B2B0B9]">
+                  {gestures.error ? 'The camera is not on.' : 'Starting the camera. Allow it if your browser asks.'}
+                </p>
               )}
             </div>
-            {gestures.error && <p className="mt-3 text-sm text-[#FF8A9A]">{gestures.error}</p>}
 
+            {gestures.error && (
+              <div className="mt-4 rounded-2xl border-2 border-[#F0566B]/50 bg-[#202227] p-4 sm:p-5" role="alert" data-testid="record-camera-error">
+                <p className="font-semibold text-[#FF8A9A]">The camera could not start</p>
+                <p className="mt-1 text-sm text-[#ECEAE4]">{gestures.error}</p>
+                <p className="mt-2 text-sm text-[#B2B0B9]">Once the camera is allowed and free, go back and press start again.</p>
+                <button
+                  type="button"
+                  className="mt-4 min-h-10 rounded-full border border-white/20 px-5 text-sm font-semibold hover:border-white/50 pointer-coarse:min-h-11"
+                  onClick={() => setStarted(false)}
+                >
+                  Go back
+                </button>
+              </div>
+            )}
             {/* What to show, then whether it is being recorded: side by side on a
                 wide screen, stacked on a phone so neither squeezes the other. */}
-            <div className="mt-4 rounded-2xl border border-white/10 bg-[#202227] p-4 sm:mt-5 sm:flex sm:items-center sm:gap-4 sm:p-5">
-              <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
-                {isSign(step.label) && <PoseIcon layer={step.label} hand={step.hand} size={44} />}
+            <div
+              className={`mt-4 rounded-2xl border-2 bg-[#202227] p-4 transition-colors sm:flex sm:items-center sm:gap-5 sm:p-5 ${recordingNow ? 'border-[#F0566B]' : 'border-white/10'}`}
+            >
+              <div className="flex min-w-0 flex-1 items-center gap-4">
+                {isSign(step.label) && <PoseIcon layer={step.label} hand={step.hand} size={64} />}
                 <div className="min-w-0">
-                  <p className="text-sm text-[#9C9AA3]">
-                    {index + 1} of {STEPS.length}, <b style={{ color: HAND_COLOR[step.hand] }}>{step.hand.toLowerCase()} hand</b>
-                  </p>
-                  <p className="font-display text-xl font-bold leading-snug sm:text-2xl">
+                  <p className="font-display text-2xl font-bold leading-tight">
                     {isSign(step.label) ? `Show the sign for ${step.label}` : CLIP_PROMPT[step.label]}
                   </p>
+                  {isSign(step.label) && <p className="mt-1 text-sm text-[#B2B0B9]">{fingerWords(step.label)}</p>}
                 </div>
               </div>
-              <span
+              <div
                 data-testid="record-phase"
-                className={`mt-3 block rounded-full px-3 py-1.5 text-center text-sm font-semibold sm:mt-0 sm:shrink-0 ${phase === 'recording' && gestures.ready ? 'bg-[#E5384F] text-white' : 'bg-white/10 text-[#9C9AA3]'}`}
+                className={`mt-4 rounded-xl px-4 py-2.5 sm:mt-0 sm:w-60 sm:shrink-0 ${recordingNow ? 'bg-[#F0566B] text-[#16171B]' : 'bg-white/10 text-[#ECEAE4]'}`}
               >
-                {!gestures.ready ? 'Waiting' : phase === 'recording' ? 'Recording, hold still' : 'Get ready'}
-              </span>
+                {!gestures.ready ? (
+                  <p className="text-center text-sm font-semibold">{gestures.error ? 'Camera off' : 'Waiting for the camera'}</p>
+                ) : (
+                  <Countdown
+                    key={`${index}-${phase}`}
+                    ms={phase === 'recording' ? RECORD_MS : READY_MS}
+                    label={phase === 'recording' ? 'Recording, hold still' : 'Get ready'}
+                  />
+                )}
+              </div>
             </div>
           </div>
         )}
 
         {done && (
-          <div className="mt-8 rounded-2xl border border-white/10 bg-[#202227] p-6" data-testid="record-done">
-            <p className="font-display text-2xl font-bold">Done. Thank you.</p>
-            <p className="mt-2 text-[#9C9AA3]">
-              {clips.length} clips and {frames} frames recorded. Download the file, then send it to whoever asked you, or keep it, or delete it.
+          <div className="mt-8 rounded-2xl border border-white/10 bg-[#202227] p-5 sm:p-6" data-testid="record-done">
+            <div className="h-1.5 rounded-full bg-[#2FB36B]" aria-hidden />
+            <p className="font-display mt-5 text-2xl font-bold">Done. Thank you.</p>
+            <p className="mt-2 text-[#B2B0B9]">
+              {clips.length} clips and {frames} frames recorded. Nothing has left this device yet. {canShare ? 'Send the file' : 'Download the file, then send it'} to
+              whoever asked you, or keep it, or delete it.
             </p>
-            <div className="mt-5 flex flex-wrap gap-3">
+            <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               {canShare && (
-                <button type="button" data-testid="record-share" className="rounded-full bg-[#FFD500] px-6 py-2.5 font-semibold text-[#16171B] hover:bg-[#FFE04D]" onClick={share}>
+                <button type="button" data-testid="record-share" className="min-h-12 rounded-full bg-[#FFD500] px-6 font-semibold text-[#16171B] hover:bg-[#FFE04D]" onClick={share}>
                   Send the recording
                 </button>
               )}
               <button
                 type="button"
                 data-testid="record-download"
-                className={canShare ? 'rounded-full border border-white/20 px-6 py-2.5 font-semibold hover:border-white/50' : 'rounded-full bg-[#FFD500] px-6 py-2.5 font-semibold text-[#16171B] hover:bg-[#FFE04D]'}
+                className={`min-h-12 rounded-full px-6 font-semibold ${canShare ? 'border border-white/20 hover:border-white/50' : 'bg-[#FFD500] text-[#16171B] hover:bg-[#FFE04D]'}`}
                 onClick={save}
               >
                 Download the recording
@@ -254,13 +320,44 @@ export function Recorder() {
   )
 }
 
+const FINGER_NAMES = ['index', 'middle', 'ring', 'little']
+
+/** "Index and middle fingers up, the others folded": the sign in words, for someone who has never seen it. */
+function fingerWords(layer: SignLayer): string {
+  const up = FINGER_NAMES.filter((_, i) => POSE_FOR[layer][i] === '1')
+  const names = up.length === 1 ? up[0] : `${up.slice(0, -1).join(', ')} and ${up[up.length - 1]}`
+  return `${names[0].toUpperCase()}${names.slice(1)} finger${up.length > 1 ? 's' : ''} up, the others folded`
+}
+
+/** The seconds left in this part, as a number and a bar that empties. Remounted (by key) for each part. */
+function Countdown({ ms, label }: { ms: number; label: string }) {
+  const [start] = useState(() => performance.now())
+  const [now, setNow] = useState(start)
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(performance.now()), 100)
+    return () => window.clearInterval(timer)
+  }, [])
+  const left = Math.max(0, ms - (now - start))
+  return (
+    <>
+      <p className="flex items-baseline justify-between gap-3">
+        <span className="text-sm font-semibold">{label}</span>
+        <span className="font-display text-2xl font-extrabold leading-none tabular-nums">{Math.ceil(left / 1000)}</span>
+      </p>
+      <div className="mt-2 h-1 overflow-hidden rounded-full bg-black/20">
+        <div className="h-full bg-current" style={{ width: `${(left / ms) * 100}%` }} />
+      </div>
+    </>
+  )
+}
+
 function Choice({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
       type="button"
       aria-pressed={on}
       onClick={onClick}
-      className={`rounded-full px-4 py-1.5 text-sm transition ${on ? 'bg-[#4CC9F0] font-semibold text-[#16171B]' : 'border border-white/15 text-[#9C9AA3] hover:text-[#ECEAE4]'}`}
+      className={`min-h-10 rounded-full px-4 text-sm transition-colors pointer-coarse:min-h-11 ${on ? 'bg-[#4CC9F0] font-semibold text-[#16171B]' : 'border border-white/15 text-[#B2B0B9] hover:border-white/40 hover:text-[#ECEAE4]'}`}
     >
       {children}
     </button>

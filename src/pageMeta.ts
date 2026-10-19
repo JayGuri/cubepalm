@@ -12,6 +12,8 @@ export interface PageMeta {
   description: string
   /** The one address this page should be known by. */
   canonical: string
+  /** True for an address with no page: search engines are asked to leave it out. */
+  noindex?: boolean
 }
 
 const HOME: PageMeta = {
@@ -69,7 +71,8 @@ export function pageMeta(pathname: string): PageMeta {
   if (path === '/settings') {
     return { title: 'Settings | CubePalm', description: HOME.description, canonical: at('/settings') }
   }
-  return HOME
+  if (path === '/') return HOME
+  return { ...HOME, title: 'Page not found | CubePalm', noindex: true }
 }
 
 /** Writes a page's meta into the document head: the title, the description and the canonical link. */
@@ -88,4 +91,7 @@ export function applyPageMeta(meta: PageMeta): void {
     meta.description,
   )
   ensure('link[rel="canonical"]', () => Object.assign(document.createElement('link'), { rel: 'canonical' })).setAttribute('href', meta.canonical)
+  const robots = document.head.querySelector('meta[name="robots"]')
+  if (meta.noindex) (robots ?? ensure('meta[name="robots"]', () => Object.assign(document.createElement('meta'), { name: 'robots' }))).setAttribute('content', 'noindex')
+  else robots?.remove()
 }

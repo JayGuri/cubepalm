@@ -62,9 +62,10 @@ export interface UseHandGesturesResult {
 function friendlyCameraError(e: unknown): string {
   const name = (e as { name?: string })?.name
   if (name === 'NotAllowedError' || name === 'SecurityError')
-    return 'Camera is blocked. Allow it from the lock icon in the address bar, then switch to Hands again.'
+    return 'Camera is blocked. Allow it from the lock icon in the address bar, then try again.'
   if (name === 'NotFoundError' || name === 'OverconstrainedError') return 'No camera found on this device.'
-  if (name === 'NotReadableError') return 'The camera is busy in another app. Close it and switch to Hands again.'
+  if (name === 'NotReadableError') return 'The camera is busy in another app. Close it and try again.'
+  if (name === 'NotSupportedError' || !navigator.mediaDevices) return 'This browser cannot use a camera here. Open the page over https in Chrome, Edge, Safari or Firefox.'
   return (e as Error)?.message || 'The camera could not start.'
 }
 

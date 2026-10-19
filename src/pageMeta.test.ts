@@ -23,8 +23,10 @@ describe('page meta', () => {
     expect(second.title).toContain(`lesson 2 of ${LESSONS.length}`)
   })
 
-  it('an unknown address falls back to the home page, and a trailing slash does not matter', () => {
-    expect(pageMeta('/nowhere').canonical).toBe(`${SITE}/`)
+  it('an unknown address is not found and kept out of search, and a trailing slash does not matter', () => {
+    expect(pageMeta('/nowhere')).toMatchObject({ title: 'Page not found | CubePalm', canonical: `${SITE}/`, noindex: true })
+    expect(pageMeta('/play/nothing').noindex).toBe(true)
+    expect(pageMeta('/').noindex).toBeUndefined()
     expect(pageMeta('/learn/').canonical).toBe(`${SITE}/learn`)
   })
 

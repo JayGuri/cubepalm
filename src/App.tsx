@@ -1,8 +1,10 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
-import { Navigate, Route, BrowserRouter as Router, Routes, useLocation, useParams } from 'react-router-dom'
+import { Link, Navigate, Route, BrowserRouter as Router, Routes, useLocation, useParams } from 'react-router-dom'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { Home } from './components/screens/Home'
+import { SiteNav } from './components/SiteNav'
 import { lessonById } from './core/academy/lessons'
+import { isPuzzleAvailable } from './core/puzzles/registry'
 import { applyPageMeta, pageMeta } from './pageMeta'
 import type { SolverStatus } from './core/solvers/kociemba'
 
@@ -17,12 +19,41 @@ const Settings = lazy(() => import('./components/screens/Settings').then((m) => 
 // Keyed by puzzle so switching cubes starts a fresh session (counters, timer, best).
 function PlayRoute() {
   const { puzzleId = 'cube3' } = useParams<{ puzzleId: string }>()
-  return <FreePlay key={puzzleId} />
+  return isPuzzleAvailable(puzzleId) ? <FreePlay key={puzzleId} /> : <NotFound />
 }
 
 function LessonRoute() {
   const { lessonId = '' } = useParams<{ lessonId: string }>()
   return lessonById(lessonId) ? <FreePlay key={lessonId} lessonId={lessonId} /> : <Navigate to="/learn" replace />
+}
+
+// An address that leads nowhere: say so, show what was asked for, and offer the
+// main ways in rather than silently landing on the home page.
+function NotFound() {
+  const { pathname } = useLocation()
+  return (
+    <main className="min-h-dvh bg-[#16171B] px-4 py-8 text-[#ECEAE4] sm:px-6 sm:py-12" data-testid="not-found">
+      <div className="mx-auto max-w-2xl">
+        <SiteNav size={40} />
+        <h1 className="font-display mt-12 text-3xl font-extrabold tracking-tight sm:text-4xl">There is no page here</h1>
+        <p className="mt-3 text-[#B2B0B9]">
+          Nothing on CubePalm lives at <code className="rounded bg-[#202227] px-1.5 py-0.5 text-sm [overflow-wrap:anywhere] text-[#ECEAE4]">{pathname}</code>. The link
+          may be old or mistyped.
+        </p>
+        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+          <Link to="/" className="inline-flex min-h-11 items-center justify-center rounded-full bg-[#FFD500] px-6 font-semibold text-[#16171B] hover:bg-[#FFE04D]">
+            Go to the home page
+          </Link>
+          <Link to="/play/cube3" className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/20 px-6 font-semibold hover:border-white/50">
+            Play the 3×3
+          </Link>
+          <Link to="/learn" className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/20 px-6 font-semibold hover:border-white/50">
+            Learn to solve it
+          </Link>
+        </div>
+      </div>
+    </main>
+  )
 }
 
 // Keeps the tab title, description and canonical address in step with the page.
@@ -74,7 +105,7 @@ function App() {
           <Route path="/settings" element={<Settings />} />
           <Route path="/stats" element={<Stats />} />
           <Route path="/record" element={<Recorder />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
         </Suspense>
         </ErrorBoundary>

@@ -59,7 +59,7 @@ test('turns are logged by input method, on this device, and shown on the stats p
   // Six gaps between seven turns: enough to state a pace.
   await expect(keys).toContainText('a minute')
   await expect(page.getByTestId('stats-drag')).toHaveCount(0)
-  await expect(page.getByText('7 turns and 1 undos recorded')).toBeVisible()
+  await expect(page.getByText('7 turns and 1 undo recorded')).toBeVisible()
 
   page.once('dialog', (dialog) => void dialog.accept())
   await page.getByTestId('stats-clear').click()
