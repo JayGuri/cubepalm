@@ -7,7 +7,7 @@ test('keyboard alone can turn a face, and Shift+key gives the inverse', async ({
 
   await page.keyboard.press('u')
   await expect(page.getByTestId('solved-status')).toHaveText('Scrambled')
-  await expect(page.getByTestId('move-count')).toHaveText('1 moves')
+  await expect(page.getByTestId('move-count')).toHaveText('1 move')
 
   await page.keyboard.press('Shift+U')
   await expect(page.getByTestId('solved-status')).toHaveText('Solved')

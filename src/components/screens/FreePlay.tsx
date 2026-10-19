@@ -44,6 +44,11 @@ import { dominantMethod, flushUsage, recordUsage, type InputMethod } from '../..
 
 type InputMode = 'mouse' | 'hands'
 
+// The two halves of the Mouse/Touch vs Hands switch.
+const MODE = 'min-h-8 rounded-full px-3.5 transition active:scale-[0.97] pointer-coarse:min-h-11 max-[22rem]:px-3'
+const MODE_ON = 'bg-[#FFD500] font-semibold text-[#16171B]'
+const MODE_OFF = 'text-[#B2B0B9] hover:text-[#ECEAE4]'
+
 // The Academy holds the cube with white at the bottom. That is the same cube
 // turned over, so only the colours shown change: white and yellow trade
 // places, and so do green and blue.
@@ -151,7 +156,7 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
   const [queueError, setQueueError] = useState<string | null>(null)
 
   // --- Counters ------------------------------------------------------------
-  const { scrambleLength, scrambleText, ranked, moveCount, assisted, timer, best, newBest, elapsed, startSession, countMove, markAssisted, checkFinish } =
+  const { scrambleLength, scrambleText, ranked, moveCount, assisted, timer, best, newBest, elapsed, startSession, countMove, uncountMove, markAssisted, checkFinish } =
     useSolveSession(puzzleId)
 
   // --- Solution playback ----------------------------------------------------
@@ -222,6 +227,10 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
   const [caseIndex, setCaseIndex] = useState(0)
   const [lessonNote, setLessonNote] = useState<string | null>(null)
   const [lessonDone, setLessonDone] = useState(false)
+  // The practice position was played as a demo. That shows the way but is not
+  // a completion: the player still has to do it.
+  const [watched, setWatched] = useState(false)
+  const ownTurns = moveHistory.length - startLength
 
   // Put the cube in a lesson's practice position (not animated).
   const setupCase = (i: number) => {
@@ -229,6 +238,7 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
     stopGuide()
     setLessonNote(null)
     setLessonDone(false)
+    setWatched(false)
     flushQueue()
     reset()
     const c = lesson.cases[i]
@@ -242,7 +252,7 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
     if (!lesson) return
     const { state: now, moveHistory: history } = usePuzzleStore.getState()
     if (!now) return
-    const met = lesson.goal ? stageDone(lesson.goal, now) : history.length >= 4
+    const met = lesson.goal ? stageDone(lesson.goal, now) : history.length - usePuzzleStore.getState().startLength >= 4
     if (met) {
       setLessonDone(true)
       completeLesson(lesson.id)
@@ -259,7 +269,7 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
     lesson && state
       ? lesson.goal
         ? stageProgress(lesson.goal, state)
-        : { done: Math.min(moveHistory.length, 4), total: 4, unit: 'turns made' }
+        : { done: Math.min(moveHistory.length - startLength, 4), total: 4, unit: 'turns made' }
       : { done: 0, total: 1, unit: '' }
 
   // Play the whole practice solution as a demo, with the usual player controls.
@@ -270,6 +280,7 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
     setupCase(caseIndex)
     solveActiveRef.current = true
     setSolutionBoth({ moves: movesFromAlg(new Alg(c.solution)), index: 0 })
+    setWatched(true)
     setSolveStatus('ready')
     setPlaying(true)
   }
@@ -366,7 +377,7 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
         if (lesson) {
           // A lesson's moves are fixed; there is nothing to re-solve.
           stopGuide()
-          setLessonNote('That was not the move shown. Press Undo to take it back, then Show me again.')
+          setLessonNote('That was not the move shown. Press Undo to take it back, then Step by step again.')
           return
         }
         // Instant recovery: undo the stray turn, then carry on with the rest of
@@ -530,7 +541,7 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
     undo()
     if (last) {
       recordUsage({ k: 'undo', at: Date.now() })
-      countMove(last, true)
+      uncountMove(last)
       checkFinish()
     }
     const g = guideRef.current
@@ -606,13 +617,23 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, plugin])
 
-  const showMouseTips = !lesson && inputMode === 'mouse' && tips.open && guideStatus === 'off' && solveStatus === 'off'
+  // The guide strip or the solution player is up.
+  const panelOpen = guideStatus !== 'off' || solveStatus !== 'off'
+  const showMouseTips = !lesson && inputMode === 'mouse' && tips.open && !panelOpen
+  // Where that panel sits. On a narrow stage, across the bottom; wider, centred
+  // above the cube, or in the top-left corner in Hands mode (the camera has the
+  // top-right) and on a short screen (the cube needs the room above it).
+  const panelPlace = `w-full @min-[40rem]:absolute @min-[40rem]:top-0 @min-[40rem]:w-max ${
+    inputMode === 'hands'
+      ? '@min-[40rem]:left-0 @min-[40rem]:max-w-[calc(100%-17rem)]'
+      : '@min-[40rem]:left-1/2 @min-[40rem]:max-w-full @min-[40rem]:-translate-x-1/2'
+  } [@media(max-height:30rem)]:@min-[40rem]:left-0 [@media(max-height:30rem)]:@min-[40rem]:max-w-[calc(50%-6rem)] [@media(max-height:30rem)]:@min-[40rem]:translate-x-0`
 
   return (
     <main className="flex h-dvh flex-col overflow-hidden bg-[#16171B] text-[#ECEAE4]">
-      <header className="flex shrink-0 items-center gap-3 border-b border-white/[0.07] px-4 py-3.5 sm:px-6">
+      <header className="flex shrink-0 items-center gap-3 border-b border-white/[0.07] px-3 py-3 pointer-coarse:py-2 sm:px-6 sm:py-3.5 [@media(max-height:30rem)]:py-1.5">
         <Logo size={34} iconOnlyOnPhone />
-        <div className="flex min-w-0 items-center gap-3 max-sm:sr-only">
+        <div className="flex min-w-0 items-center gap-3 max-sm:hidden">
         <span className="text-white/20" aria-hidden>
           /
         </span>
@@ -632,13 +653,13 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
         </div>
 
         <div className="ml-auto flex items-center gap-2 sm:gap-3">
-          <div role="group" aria-label="Control with" className="flex rounded-full bg-[#202227] p-1 text-sm">
+          <div role="group" aria-label="Control with" className="flex rounded-full bg-[#202227] p-1 text-sm pointer-coarse:p-0.5">
             <button
               type="button"
               data-testid="input-mode-mouse"
               aria-pressed={inputMode === 'mouse'}
               onClick={() => setInputMode('mouse')}
-              className={`rounded-full px-3.5 py-1 transition ${inputMode === 'mouse' ? 'bg-[#FFD500] font-semibold text-[#16171B]' : 'text-[#9C9AA3] hover:text-[#ECEAE4]'}`}
+              className={`${MODE} ${inputMode === 'mouse' ? MODE_ON : MODE_OFF}`}
             >
               {touchScreen ? 'Touch' : 'Mouse'}
             </button>
@@ -647,7 +668,7 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
               data-testid="input-mode-hands"
               aria-pressed={inputMode === 'hands'}
               onClick={() => setInputMode('hands')}
-              className={`rounded-full px-3.5 py-1 transition ${inputMode === 'hands' ? 'bg-[#FFD500] font-semibold text-[#16171B]' : 'text-[#9C9AA3] hover:text-[#ECEAE4]'}`}
+              className={`${MODE} ${inputMode === 'hands' ? MODE_ON : MODE_OFF}`}
             >
               Hands
             </button>
@@ -658,12 +679,16 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
             aria-pressed={cameraLocked}
             onClick={toggleCameraLock}
             title="Freeze the view so the cube stays put (Space, or hold a fist)"
-            className={`shrink-0 whitespace-nowrap rounded-full border px-3.5 py-1.5 text-sm transition ${
+            className={`inline-flex min-h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 text-sm transition active:scale-[0.97] pointer-coarse:min-h-11 ${
               cameraLocked
                 ? 'border-[#F5B83D] bg-[#F5B83D]/15 text-[#F5B83D]'
-                : 'border-white/10 text-[#9C9AA3] hover:border-white/25 hover:text-[#ECEAE4]'
+                : 'border-white/10 text-[#B2B0B9] hover:border-white/25 hover:text-[#ECEAE4]'
             }`}
           >
+            <svg width="11" height="13" viewBox="0 0 12 14" aria-hidden className="max-[22rem]:hidden">
+              <rect x="1" y="6" width="10" height="7.5" rx="2" fill={cameraLocked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.4" />
+              <path d={cameraLocked ? 'M3.5 6V4.5a2.5 2.5 0 0 1 5 0V6' : 'M3.5 6V4.5a2.5 2.5 0 0 1 5 0'} fill="none" stroke="currentColor" strokeWidth="1.4" />
+            </svg>
             {cameraLocked ? 'View locked' : 'Lock view'}
           </button>
         </div>
@@ -681,7 +706,7 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
               index={lessonIndex(lesson.id)}
               caseNumber={caseIndex + 1}
               done={lessonDone}
-              note={lessonNote}
+              note={lessonNote ?? (watched && (!solution || solution.index >= solution.moves.length) ? 'You watched it. Press Restart position and do it yourself to finish the lesson.' : null)}
               guiding={guideStatus !== 'off'}
               watching={solveStatus !== 'off'}
               progress={lessonProgress}
@@ -691,7 +716,14 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
               onSelectCase={setupCase}
             />
           )}
-          <div className="relative min-h-0 w-full flex-1">
+          {/* Above the cube on a narrow screen the lesson scrolls inside its own box: a fade along
+              its lower edge says there is more below. */}
+          {lesson && (
+            <div aria-hidden className="pointer-events-none relative h-0 shrink-0 md:hidden">
+              <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-[#1B1D22] to-transparent" />
+            </div>
+          )}
+          <div className="@container relative min-h-0 w-full flex-1 overflow-hidden">
             {/* The stage: a glow behind the cube and its shadow on the floor. */}
             <div
               aria-hidden
@@ -714,80 +746,93 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
               guideMove={guide ? guide.steps[guide.index] : null}
             />
 
-            {(cameraLocked || lockHoldProgress > 0) && (
-              <div
-                data-testid="lock-badge"
-                className="pointer-events-none absolute bottom-4 left-4 flex items-center gap-2 rounded-full border border-[#F5B83D]/40 bg-[#16171B]/90 px-3 py-1 text-sm text-[#F5B83D]"
-              >
-                {lockHoldProgress > 0 && (
-                  <svg width="14" height="14" viewBox="0 0 20 20" aria-hidden>
-                    <circle cx="10" cy="10" r="8" fill="none" stroke="#F5B83D33" strokeWidth="3" />
-                    <circle
-                      cx="10"
-                      cy="10"
-                      r="8"
-                      fill="none"
-                      stroke="#F5B83D"
-                      strokeWidth="3"
-                      strokeDasharray={`${lockHoldProgress * 50.3} 50.3`}
-                      transform="rotate(-90 10 10)"
-                    />
-                  </svg>
-                )}
-                {lockHoldProgress > 0 ? (cameraLocked ? 'Keep holding to unlock…' : 'Keep holding to lock…') : 'View locked'}
-              </div>
-            )}
-
             {showMouseTips && <MouseTips onClose={tips.dismiss} mirror={plugin.id === 'mirror'} />}
-            {!lesson && inputMode === 'mouse' && !tips.open && guideStatus === 'off' && solveStatus === 'off' && <TipsButton onClick={tips.show} />}
+            {!lesson && inputMode === 'mouse' && !tips.open && !panelOpen && <TipsButton onClick={tips.show} />}
 
             {inputMode === 'hands' && (
               <CameraPanel videoRef={gestures.videoRef} feed={gestures.feed} tracker={gestures.tracker} ready={gestures.ready} error={gestures.error} signs={heldSigns.map((h) => h.notation)} />
             )}
 
-            {inputMode === 'hands' && showHandsHelp && <HandsKey onClose={() => setShowHandsHelp(false)} />}
-            {inputMode === 'hands' && !showHandsHelp && (
+            {/* In Hands mode the top-left corner holds the instructions: the sign key, or the guide when it is up. */}
+            {inputMode === 'hands' && !panelOpen && showHandsHelp && <HandsKey onClose={() => setShowHandsHelp(false)} />}
+            {inputMode === 'hands' && !panelOpen && !showHandsHelp && (
               <button
                 type="button"
                 onClick={() => setShowHandsHelp(true)}
-                className="absolute left-4 top-4 rounded-full border border-white/10 bg-[#202227] px-3.5 py-1.5 text-sm text-[#9C9AA3] hover:text-[#ECEAE4]"
+                className="absolute left-3 top-3 inline-flex min-h-9 items-center rounded-full border border-white/10 bg-[#202227] px-3.5 text-sm text-[#B2B0B9] transition hover:border-white/25 hover:text-[#ECEAE4] active:scale-[0.97] pointer-coarse:min-h-11 sm:left-4 sm:top-4"
               >
                 Show hand signs
               </button>
             )}
 
-            {signsActive && heldSigns.length > 0 && <SignsHud signs={heldSigns} />}
-
             {/* A solve you made, or a lesson you finished: once, and briefly. */}
             {((timer.end !== null && solved) || lessonDone) && <SolvedBurst key={timer.end ?? 'lesson'} />}
 
-            {guideStatus !== 'off' && (
-              <GuidePanel
-                guide={guide}
-                status={guideStatus}
-                onStop={stopGuide}
-                showHands={inputMode === 'hands' || (Boolean(lesson) && !touchScreen)}
-                touch={touchScreen && inputMode === 'mouse'}
-                optimal={guideOptimal}
-                refining={guideRefining}
-              />
-            )}
+            {/* What sits over the bottom of the stage, stacked so nothing covers anything else: the
+                signs being held, the view lock, and (on a phone) the guide or the solution player.
+                On a wider screen those two are lifted out of the stack to the top. */}
+            <div className="pointer-events-none absolute inset-3 z-10 flex flex-col items-center justify-end gap-2 sm:inset-4">
+              {signsActive && heldSigns.length > 0 && <SignsHud signs={heldSigns} />}
 
-            {solveStatus !== 'off' && (
-              <SolutionPlayer
-                status={solveStatus}
-                moves={solution?.moves.map((m) => m.alg.toString()) ?? []}
-                index={solution?.index ?? 0}
-                playing={playing}
-                speed={speed}
-                steps={solution ? expandSteps(solution.moves).length : 0}
-                optimal={solutionOptimal && !lesson}
-                onPlayPause={() => setPlaying((v) => !v)}
-                onStep={stepSolution}
-                onSpeed={setSpeed}
-                onClose={closeSolution}
-              />
-            )}
+              {(cameraLocked || lockHoldProgress > 0) && (
+                <div
+                  data-testid="lock-badge"
+                  className="flex items-center gap-2 self-start rounded-full border border-[#F5B83D]/40 bg-[#16171B]/90 px-3 py-1 text-sm text-[#F5B83D] transition duration-200 starting:opacity-0"
+                >
+                  {lockHoldProgress > 0 ? (
+                    <svg width="14" height="14" viewBox="0 0 20 20" aria-hidden>
+                      <circle cx="10" cy="10" r="8" fill="none" stroke="#F5B83D33" strokeWidth="3" />
+                      <circle
+                        cx="10"
+                        cy="10"
+                        r="8"
+                        fill="none"
+                        stroke="#F5B83D"
+                        strokeWidth="3"
+                        strokeDasharray={`${lockHoldProgress * 50.3} 50.3`}
+                        transform="rotate(-90 10 10)"
+                      />
+                    </svg>
+                  ) : (
+                    <svg width="12" height="14" viewBox="0 0 12 14" aria-hidden>
+                      <rect x="1" y="6" width="10" height="7.5" rx="2" fill="currentColor" />
+                      <path d="M3.5 6V4.5a2.5 2.5 0 0 1 5 0V6" fill="none" stroke="currentColor" strokeWidth="1.6" />
+                    </svg>
+                  )}
+                  {lockHoldProgress > 0 ? (cameraLocked ? 'Keep holding to unlock…' : 'Keep holding to lock…') : 'View locked'}
+                </div>
+              )}
+
+              {guideStatus !== 'off' && (
+                <GuidePanel
+                  className={panelPlace}
+                  guide={guide}
+                  status={guideStatus}
+                  onStop={stopGuide}
+                  showHands={inputMode === 'hands' || (Boolean(lesson) && !touchScreen)}
+                  touch={touchScreen && inputMode === 'mouse'}
+                  optimal={guideOptimal}
+                  refining={guideRefining}
+                />
+              )}
+
+              {solveStatus !== 'off' && (
+                <SolutionPlayer
+                  className={panelPlace}
+                  status={solveStatus}
+                  moves={solution?.moves.map((m) => m.alg.toString()) ?? []}
+                  index={solution?.index ?? 0}
+                  playing={playing}
+                  speed={speed}
+                  steps={solution ? expandSteps(solution.moves).length : 0}
+                  optimal={solutionOptimal && !lesson}
+                  onPlayPause={() => setPlaying((v) => !v)}
+                  onStep={stepSolution}
+                  onSpeed={setSpeed}
+                  onClose={closeSolution}
+                />
+              )}
+            </div>
           </div>
           </div>
 
@@ -808,11 +853,14 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
                   data-testid="lesson-status"
                   className={`rounded-full px-3 py-1 font-semibold ${lessonDone ? 'bg-[#2FB36B]/15 text-[#4ED48A]' : 'bg-white/5 text-[#9C9AA3]'}`}
                 >
-                  {lessonDone ? 'Complete' : 'In progress'}
+                  {lessonDone ? 'Complete' : watched ? 'Watched' : 'In progress'}
                 </span>
-                <span className="tabular-nums text-[#9C9AA3]" data-testid="move-count">
-                  {moveHistory.length} moves
-                </span>
+                {/* Your own turns only: not the ones that set the position up, nor a demo's. */}
+                {!watched && (
+                  <span className="tabular-nums text-[#9C9AA3]" data-testid="move-count">
+                    {ownTurns} {ownTurns === 1 ? 'move' : 'moves'}
+                  </span>
+                )}
               </div>
               <Link to="/learn" className={BUTTON}>
                 All lessons

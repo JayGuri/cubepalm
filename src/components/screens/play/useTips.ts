@@ -2,9 +2,9 @@ import { useState } from 'react'
 
 const TIPS_KEY = 'cubepalm.tips.v1'
 
-/** A phone-sized screen, where the cube needs the room more than the tips do. */
+/** A phone-sized screen (either way up), where the cube needs the room more than the tips do. */
 export function onPhone(): boolean {
-  return typeof window !== 'undefined' && window.matchMedia('(max-width: 640px)').matches
+  return typeof window !== 'undefined' && window.matchMedia('(max-width: 640px), (max-height: 500px)').matches
 }
 
 /**

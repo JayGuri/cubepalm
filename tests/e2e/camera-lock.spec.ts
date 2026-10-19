@@ -10,7 +10,8 @@ async function open(page: Page) {
 // report whether the rendered pixels changed at all.
 async function viewChangesAfterCameraInput(page: Page) {
   const canvas = page.locator('canvas')
-  const before = await canvas.screenshot()
+  // Fades on the page (the lock badge arriving) are finished first: only the 3D view is being compared.
+  const before = await canvas.screenshot({ animations: 'disabled' })
   const box = (await canvas.boundingBox())!
   // Empty space on the right: the left edge holds the tips panel.
   const x = box.x + box.width * 0.9
@@ -21,7 +22,7 @@ async function viewChangesAfterCameraInput(page: Page) {
   await page.mouse.move(x - 150, y + 40, { steps: 10 })
   await page.mouse.up({ button: 'right' })
   await page.waitForTimeout(400)
-  const after = await canvas.screenshot()
+  const after = await canvas.screenshot({ animations: 'disabled' })
   return !before.equals(after)
 }
 
@@ -45,7 +46,7 @@ test('Space toggles the lock on and off, and layer turns still work while locked
   await expect(page.getByTestId('puzzle-canvas')).toHaveAttribute('data-camera-locked', 'true')
 
   await page.keyboard.press('r')
-  await expect(page.getByTestId('move-count')).toHaveText('1 moves')
+  await expect(page.getByTestId('move-count')).toHaveText('1 move')
 
   await page.keyboard.press('Space')
   await expect(page.getByTestId('puzzle-canvas')).toHaveAttribute('data-camera-locked', 'false')

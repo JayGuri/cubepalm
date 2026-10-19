@@ -261,7 +261,7 @@ test.describe('on a touch screen', () => {
     await expect(page.getByTestId('input-mode-mouse')).toHaveText('Touch')
     const pad = page.getByTestId('move-pad')
     await pad.getByRole('button', { name: 'Turn the R face clockwise' }).tap()
-    await expect(page.getByTestId('move-count')).toHaveText('1 moves')
+    await expect(page.getByTestId('move-count')).toHaveText('1 move')
     // The other direction: flip the switch, tap again, and the cube is back.
     await pad.getByRole('button', { name: 'Turn the other way' }).tap()
     await pad.getByRole('button', { name: 'Turn the R face counter-clockwise' }).tap()

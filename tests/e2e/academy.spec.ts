@@ -153,7 +153,7 @@ test("after a scramble the move counter starts at 0, separate from the scramble,
   await expect(page.getByTestId("move-count")).toHaveText("0 moves")
   await expect(page.getByTestId("solve-timer")).toHaveCount(0)
   await page.keyboard.press("r")
-  await expect(page.getByTestId("move-count")).toHaveText("1 moves")
+  await expect(page.getByTestId("move-count")).toHaveText("1 move")
   await expect(page.getByTestId("solve-timer")).toBeVisible()
   // Reset goes back to the same scramble and starts the count and the clock over.
   const scramble = await page.getByTestId("scramble-length").getAttribute("title")

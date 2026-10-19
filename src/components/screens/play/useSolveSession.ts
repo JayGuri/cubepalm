@@ -85,6 +85,14 @@ export function useSolveSession(puzzleId: string) {
     }
   }
 
+  // Undo takes a turn back off the count (it is not a turn of its own).
+  const uncountMove = (move: Move) => {
+    const session = sessionRef.current
+    if (session.end !== null) return
+    session.moves = Math.max(0, session.moves - quarterTurns([move]))
+    setMoveCount(session.moves)
+  }
+
   const markAssisted = () => {
     if (!sessionRef.current.scrambled) return
     sessionRef.current.assisted = true
@@ -119,5 +127,5 @@ export function useSolveSession(puzzleId: string) {
   }, [running])
   const elapsed = timer.start === null ? 0 : Math.max(0, (timer.end ?? clock) - timer.start)
 
-  return { scrambleLength, scrambleText, ranked, moveCount, assisted, timer, best, newBest, elapsed, startSession, countMove, markAssisted, checkFinish }
+  return { scrambleLength, scrambleText, ranked, moveCount, assisted, timer, best, newBest, elapsed, startSession, countMove, uncountMove, markAssisted, checkFinish }
 }

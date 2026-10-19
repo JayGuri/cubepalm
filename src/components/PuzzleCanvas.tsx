@@ -704,13 +704,15 @@ function PuzzleCanvasInner({
   )
 }
 
-// On a tall, narrow screen the cube would overflow the sides, so zoom out in
-// proportion to how narrow the canvas is.
+// The camera is framed by height, with a little room left round the cube for
+// the guide's arrow, which reaches past it. On a canvas narrower than it is
+// tall the cube would crowd the sides (and the arrow be cut off), so zoom out
+// in proportion to how narrow the canvas is.
 function FitToScreen() {
   const { camera, size } = useThree()
   useEffect(() => {
     const cam = camera as THREE.PerspectiveCamera
-    Object.assign(cam, { zoom: Math.min(1, Math.max(0.55, (size.width / size.height) * 1.05)) })
+    Object.assign(cam, { zoom: Math.min(0.94, Math.max(0.55, (size.width / size.height) * 0.88)) })
     cam.updateProjectionMatrix()
   }, [camera, size])
   return null

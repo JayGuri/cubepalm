@@ -17,7 +17,7 @@ export async function createCube3Plugin(): Promise<PuzzlePlugin> {
 
   return {
     id: 'cube3',
-    displayName: '3x3 Cube',
+    displayName: '3×3 Cube',
 
     createInitialState,
     applyMove,

@@ -28,7 +28,7 @@ export function GestureConfidenceIndicator({ feed }: GestureConfidenceIndicatorP
     label = 'No hand detected'
     colorClass = 'text-[#9C9AA3]'
   } else if (level === 'low') {
-    label = 'Low confidence - improve lighting'
+    label = 'Low confidence: try more light'
     colorClass = 'text-[#F5A524]'
   } else if (level === 'ok') {
     label = 'Tracking'

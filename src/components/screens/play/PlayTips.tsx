@@ -1,3 +1,5 @@
+import { CLOSE } from './buttonStyles'
+
 /** The small round button that brings the tips back. */
 export function TipsButton({ onClick }: { onClick: () => void }) {
   return (
@@ -7,7 +9,7 @@ export function TipsButton({ onClick }: { onClick: () => void }) {
       onClick={onClick}
       aria-label="Show tips"
       title="How to turn the cube"
-      className="absolute left-3 top-3 grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-[#202227] text-base font-bold text-[#9C9AA3] hover:text-[#ECEAE4] sm:left-4 sm:top-4"
+      className="absolute left-3 top-3 grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-[#202227] text-base font-bold text-[#B2B0B9] transition hover:border-white/25 hover:text-[#ECEAE4] active:scale-90 pointer-coarse:h-11 pointer-coarse:w-11 sm:left-4 sm:top-4"
     >
       ?
     </button>
@@ -18,11 +20,11 @@ export function MouseTips({ onClose, mirror }: { onClose: () => void; mirror: bo
   return (
     <div
       data-testid="mouse-tips"
-      className="absolute left-4 top-4 w-[calc(100%-2rem)] rounded-xl border border-white/10 bg-[#202227]/95 p-4 text-sm text-[#9C9AA3] shadow-lg sm:w-72"
+      className="absolute inset-x-3 top-3 max-h-[calc(100%-1.5rem)] overflow-y-auto rounded-xl border border-white/10 bg-[#202227]/95 p-4 text-sm text-[#B2B0B9] shadow-lg backdrop-blur transition duration-200 starting:-translate-y-1 starting:opacity-0 @min-[40rem]:right-auto @min-[40rem]:left-4 @min-[40rem]:top-4 @min-[40rem]:max-h-[calc(100%-2rem)] @min-[40rem]:w-72"
     >
-      <div className="mb-2 flex items-start justify-between gap-3">
+      <div className="-mr-1.5 -mt-1.5 mb-1 flex items-center justify-between gap-3">
         <h2 className="font-display text-base font-bold text-[#ECEAE4]">How to turn the cube</h2>
-        <button type="button" onClick={onClose} aria-label="Hide tips" className="text-lg leading-none hover:text-[#ECEAE4]">
+        <button type="button" onClick={onClose} aria-label="Hide tips" className={CLOSE}>
           ×
         </button>
       </div>

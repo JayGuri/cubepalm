@@ -55,7 +55,7 @@ test('right hand, index finger, held: exactly R (clockwise)', async ({ page }) =
   await show(page, [R('1000')], 8)
   await expect(page.getByTestId('sign-hud')).toContainText('R')
   await show(page, [R('1000')], HOLD)
-  await expect(page.getByTestId('move-count')).toHaveText('1 moves')
+  await expect(page.getByTestId('move-count')).toHaveText('1 move')
   await page.keyboard.press('Shift+R')
   await expect(page.getByTestId('solved-status')).toHaveText('Solved')
 })
@@ -63,7 +63,7 @@ test('right hand, index finger, held: exactly R (clockwise)', async ({ page }) =
 test("left hand, same sign: exactly R' (counter-clockwise)", async ({ page }) => {
   await openHands(page)
   await show(page, [L('1000')], HOLD)
-  await expect(page.getByTestId('move-count')).toHaveText('1 moves')
+  await expect(page.getByTestId('move-count')).toHaveText('1 move')
   await page.keyboard.press('r')
   await expect(page.getByTestId('solved-status')).toHaveText('Solved')
 })
@@ -71,7 +71,7 @@ test("left hand, same sign: exactly R' (counter-clockwise)", async ({ page }) =>
 test("U and U' are both reachable: right hand U, then left hand U' undoes it", async ({ page }) => {
   await openHands(page)
   await show(page, [R('1100')], HOLD)
-  await expect(page.getByTestId('move-count')).toHaveText('1 moves')
+  await expect(page.getByTestId('move-count')).toHaveText('1 move')
   await show(page, [], 4)
   await show(page, [L('1100')], HOLD)
   await expect(page.getByTestId('move-count')).toHaveText('2 moves')
@@ -87,7 +87,7 @@ test('both hands at once: two different turns', async ({ page }) => {
 test('holding a sign longer turns once; relax and sign again for a second turn', async ({ page }) => {
   await openHands(page)
   await show(page, [R('1110')], HOLD * 2)
-  await expect(page.getByTestId('move-count')).toHaveText('1 moves')
+  await expect(page.getByTestId('move-count')).toHaveText('1 move')
   await show(page, [R('1111')], 8)
   await show(page, [R('1110')], HOLD)
   await expect(page.getByTestId('move-count')).toHaveText('2 moves')

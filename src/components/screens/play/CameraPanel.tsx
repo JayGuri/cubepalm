@@ -23,7 +23,7 @@ export function CameraPanel({
   signs: string[]
 }) {
   return (
-    <div data-testid="camera-panel" data-tracker={tracker ?? ''} title={tracker ? `Hand tracking: ${tracker}` : undefined} className="absolute right-3 top-3 w-32 overflow-hidden rounded-xl border border-white/10 bg-[#202227] shadow-lg sm:right-4 sm:top-4 sm:w-64">
+    <div data-testid="camera-panel" data-tracker={tracker ?? ''} title={tracker ? `Hand tracking: ${tracker}` : undefined} className="absolute right-3 top-3 overflow-hidden rounded-xl border border-white/10 bg-[#202227] shadow-lg w-36 transition duration-200 starting:opacity-0 @min-[40rem]:right-4 @min-[40rem]:top-4 @min-[40rem]:w-64 [@media(max-height:30rem)]:@min-[40rem]:w-48">
       <div className="relative aspect-video bg-black">
         {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
         <video ref={videoRef} className="h-full w-full -scale-x-100 object-cover" playsInline muted data-testid="gesture-video" />
@@ -34,16 +34,19 @@ export function CameraPanel({
           </p>
         )}
       </div>
-      <div className="flex items-center justify-between px-2.5 py-1.5">
-        <GestureConfidenceIndicator feed={feed} />
-        <span className="shrink-0 text-xs text-[#9C9AA3]" data-testid="gesture-state">
-          {signs.length ? signs.join(' + ') : 'Show a sign'}
-        </span>
-      </div>
-      {error && (
-        <p className="bg-[#EF4444]/15 px-2.5 py-1.5 text-xs text-[#EF4444]" data-testid="gesture-error">
+      {/* What the camera reads (on a narrow stage the panel is small: the reading stays, the hint
+          goes). With no camera there is nothing to read, so only the problem is shown. */}
+      {error ? (
+        <p className="bg-[#EF4444]/15 px-2.5 py-1.5 text-[0.7rem] leading-snug text-[#FF8A8A] @min-[40rem]:text-xs" data-testid="gesture-error">
           {error}
         </p>
+      ) : (
+        <div className="flex items-center justify-between gap-2 px-2.5 py-1.5">
+          <GestureConfidenceIndicator feed={feed} />
+          <span className="shrink-0 text-xs text-[#B2B0B9] @max-[40rem]:hidden" data-testid="gesture-state">
+            {signs.length ? signs.join(' + ') : 'Show a sign'}
+          </span>
+        </div>
       )}
     </div>
   )
