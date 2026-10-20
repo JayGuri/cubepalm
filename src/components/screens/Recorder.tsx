@@ -95,6 +95,18 @@ export function Recorder() {
     return () => video.removeEventListener('loadedmetadata', note)
   }, [gestures.ready, gestures.videoRef])
 
+  // A shape that went wrong can be taken again. While recording, throw the clip away
+  // and start this shape over; while getting ready, step back and drop the shape
+  // before (the one that has just finished). Either way nothing bad stays in the file.
+  const redoThis = () => {
+    recordingRef.current = null
+    setPhase('ready')
+  }
+  const backOne = () => {
+    setClips((all) => all.slice(0, index - 1))
+    setIndex((i) => i - 1)
+  }
+
   const frames = clips.reduce((n, c) => n + c.frames.length, 0)
   const build = () => {
     const recording: Recording = { version: 1, recordedAt: new Date().toISOString(), conditions, camera, clips }
@@ -287,6 +299,18 @@ export function Recorder() {
                 )}
               </div>
             </div>
+            {gestures.ready && (phase === 'recording' || index > 0) && (
+              <div className="mt-3 flex">
+                <button
+                  type="button"
+                  data-testid="record-redo"
+                  className="min-h-10 rounded-full border border-white/20 px-5 text-sm font-semibold hover:border-white/50 pointer-coarse:min-h-11"
+                  onClick={phase === 'recording' ? redoThis : backOne}
+                >
+                  {phase === 'recording' ? 'Redo this shape' : 'Redo the last shape'}
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -311,6 +335,14 @@ export function Recorder() {
                 onClick={save}
               >
                 Download the recording
+              </button>
+              <button
+                type="button"
+                data-testid="record-redo"
+                className="min-h-12 rounded-full border border-white/20 px-6 font-semibold hover:border-white/50"
+                onClick={backOne}
+              >
+                Redo the last shape
               </button>
             </div>
           </div>
