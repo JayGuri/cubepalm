@@ -73,16 +73,25 @@ function App() {
     let unsubscribe = () => {}
     let cancelled = false
     // Loaded on demand so the solver stays out of the home page's bundle.
-    void import('./core/solvers/kociemba').then((m) => {
-      if (cancelled) return
-      unsubscribe = m.subscribeSolverStatus(() => setSolver(m.getSolverStatus()))
-      m.initSolver().catch(() => undefined)
-    })
+    const warmUp = () => {
+      void import('./core/solvers/kociemba').then((m) => {
+        if (cancelled) return
+        unsubscribe = m.subscribeSolverStatus(() => setSolver(m.getSolverStatus()))
+        m.initSolver().catch(() => undefined)
+      })
+    }
+    // Neither the warm-up nor the play screen's code is wanted by the page being
+    // opened, unless that page is a cube: on any other page they would only compete
+    // with it for the network and the main thread, so they wait for the browser to
+    // be idle. A cube screen needs the solver at once.
+    const idle = (run: () => void) => (window.requestIdleCallback ? window.requestIdleCallback(run, { timeout: 4000 }) : window.setTimeout(run, 1500))
+    const onCube = /^\/(play|learn\/)/.test(window.location.pathname)
+    if (onCube) warmUp()
+    else idle(warmUp)
     // Fetch the play screen's code while the visitor is still reading the home
     // page, so the first click on Play opens at once. Skipped for anyone who has
     // asked their browser to save data.
     const saveData = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData
-    const idle = (run: () => void) => (window.requestIdleCallback ? window.requestIdleCallback(run) : window.setTimeout(run, 1500))
     if (!saveData) idle(() => void import('./components/screens/FreePlay').catch(() => undefined))
     return () => {
       cancelled = true
