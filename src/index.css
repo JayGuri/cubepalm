@@ -30,6 +30,52 @@
      toy-like character. Both are bundled with the app (no font servers). */
   --font-sans: 'Atkinson Hyperlegible', ui-sans-serif, system-ui, sans-serif;
   --font-display: 'Bricolage Grotesque Variable', ui-sans-serif, system-ui, sans-serif;
+
+  /* The table and the cube's body: dark plastic, from the floor up. */
+  --color-ink: #16171b; /* the page: the table the cube sits on */
+  --color-panel: #1b1d22; /* a panel lying on the table */
+  --color-raised: #202227; /* a control on a panel */
+  --color-plastic: #0e0f13; /* the black between stickers, and text printed on a sticker */
+  --color-fg: #eceae4; /* text */
+  --color-fg-muted: #b2b0b9; /* secondary text, 8:1 on ink */
+  --color-fg-faint: #9c9aa3; /* tertiary text, 6.4:1 on ink */
+
+  /* The six stickers, tuned for a dark page. Each is also a part of the site,
+     so a page wears its face's colour: Learn orange, 3x3 green, Mirror blue,
+     Settings white, How it works red, primary actions yellow. */
+  --color-sticker-white: #f4f5f8;
+  --color-sticker-yellow: #ffd500;
+  --color-sticker-red: #f0566b;
+  --color-sticker-orange: #ff8a00;
+  --color-sticker-green: #2fb36b;
+  --color-sticker-blue: #5b8def;
+
+  /* The two hands: right turns clockwise, left turns back. */
+  --color-hand-right: #ffd500;
+  --color-hand-left: #4cc9f0;
+
+  /* Motion (see src/motion/easing.ts, which these mirror). A layer's turn: runs
+     about 2% past and settles, the detent of a real cube. */
+  --ease-turn: linear(0, 0.0341, 0.1176, 0.2275, 0.3476, 0.4665, 0.5771, 0.6753, 0.7593, 0.8288, 0.8845, 0.9277, 0.9602, 0.9837, 0.9999, 1.0103, 1.0164, 1.0193, 1.0199, 1.019, 1.0173, 1.015, 1.0126, 1.0103, 1.0081, 1.0062, 1.0046, 1.0032, 1.0022, 1.0013, 1.0007, 1.0003, 1);
+  /* A sticker or tile clicking into place: a firmer snap, about 4% past. */
+  --ease-click: linear(0, 0.031, 0.1086, 0.2135, 0.3309, 0.45, 0.5633, 0.6661, 0.7556, 0.8309, 0.8922, 0.9402, 0.9765, 1.0026, 1.0203, 1.0311, 1.0367, 1.0384, 1.0373, 1.0344, 1.0304, 1.0259, 1.0213, 1.017, 1.013, 1.0095, 1.0066, 1.0042, 1.0024, 1.001, 0.9999, 0.9992, 1);
+  /* A panel arriving: no visible overshoot. */
+  --ease-soft: linear(0, 0.0308, 0.1056, 0.2039, 0.3114, 0.4186, 0.5194, 0.6105, 0.6902, 0.7582, 0.8149, 0.8612, 0.8984, 0.9277, 0.9503, 0.9674, 0.98, 0.9891, 0.9955, 0.9998, 1.0025, 1.0041, 1.0048, 1.005, 1.0049, 1.0045, 1.004, 1.0034, 1);
+}
+
+/* Moulded plastic: a panel with the faint highlight a lamp leaves on its top edge. */
+@utility plastic {
+  background-color: var(--color-panel);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.05),
+    0 1px 0 rgb(0 0 0 / 0.35);
+}
+
+/* A sticker: flat colour, a sheen along the top and a darker lip along the bottom. */
+@utility sticker {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.28),
+    inset 0 -3px 0 rgb(0 0 0 / 0.18);
 }
 
 html {

@@ -33,6 +33,7 @@ describe('page meta', () => {
   it('the sitemap lists exactly the pages that have meta', () => {
     const listed = [...sitemap.matchAll(/<loc>(.*?)<\/loc>/g)].map((m) => m[1])
     for (const url of listed) expect(pageMeta(url.slice(SITE.length)).canonical).toBe(url)
-    expect(listed).toHaveLength(2 + LESSONS.length + 2)
+    // Home and /learn, the lessons, the two puzzles, and How it works.
+    expect(listed).toHaveLength(2 + LESSONS.length + 2 + 1)
   })
 })

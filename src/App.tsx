@@ -15,6 +15,7 @@ const Academy = lazy(() => import('./components/screens/Academy').then((m) => ({
 const Stats = lazy(() => import('./components/screens/Stats').then((m) => ({ default: m.Stats })))
 const Recorder = lazy(() => import('./components/screens/Recorder').then((m) => ({ default: m.Recorder })))
 const Settings = lazy(() => import('./components/screens/Settings').then((m) => ({ default: m.Settings })))
+const How = lazy(() => import('./components/screens/How').then((m) => ({ default: m.How })))
 
 // Keyed by puzzle so switching cubes starts a fresh session (counters, timer, best).
 function PlayRoute() {
@@ -114,6 +115,7 @@ function App() {
           <Route path="/settings" element={<Settings />} />
           <Route path="/stats" element={<Stats />} />
           <Route path="/record" element={<Recorder />} />
+          <Route path="/how" element={<How />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
         </Suspense>

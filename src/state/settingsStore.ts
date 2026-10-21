@@ -16,11 +16,17 @@ export interface SettingsState {
   swapHands: boolean
   turnSpeed: TurnSpeed
   signReading: SignReading
+  /** A soft click as each layer lands, like the detent of a real cube. */
+  turnSound: boolean
+  /** A short tap of the phone's vibration motor as each layer lands, where the phone has one. */
+  haptics: boolean
   setColorblindPalette: (on: boolean) => void
   setDefaultInputMode: (mode: InputModePreference) => void
   setSwapHands: (on: boolean) => void
   setTurnSpeed: (speed: TurnSpeed) => void
   setSignReading: (reading: SignReading) => void
+  setTurnSound: (on: boolean) => void
+  setHaptics: (on: boolean) => void
 }
 
 const STORAGE_KEY = 'cubepalm.settings.v1'
@@ -31,6 +37,8 @@ interface StoredSettings {
   swapHands: boolean
   turnSpeed: TurnSpeed
   signReading: SignReading
+  turnSound: boolean
+  haptics: boolean
 }
 
 const DEFAULTS: StoredSettings = {
@@ -39,6 +47,8 @@ const DEFAULTS: StoredSettings = {
   swapHands: false,
   turnSpeed: 'normal',
   signReading: 'classic',
+  turnSound: false,
+  haptics: false,
 }
 
 /** Keeps each stored value only if it is one the app understands; anything else falls back to its default. */
@@ -50,6 +60,8 @@ export function sanitize(stored: unknown): StoredSettings {
     swapHands: typeof s.swapHands === 'boolean' ? s.swapHands : DEFAULTS.swapHands,
     turnSpeed: s.turnSpeed === 'slow' || s.turnSpeed === 'normal' || s.turnSpeed === 'fast' ? s.turnSpeed : DEFAULTS.turnSpeed,
     signReading: s.signReading === 'classic' || s.signReading === 'precise' ? s.signReading : DEFAULTS.signReading,
+    turnSound: typeof s.turnSound === 'boolean' ? s.turnSound : DEFAULTS.turnSound,
+    haptics: typeof s.haptics === 'boolean' ? s.haptics : DEFAULTS.haptics,
   }
 }
 
@@ -94,5 +106,13 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setSignReading: (reading) => {
     persist({ ...get(), signReading: reading })
     set({ signReading: reading })
+  },
+  setTurnSound: (on) => {
+    persist({ ...get(), turnSound: on })
+    set({ turnSound: on })
+  },
+  setHaptics: (on) => {
+    persist({ ...get(), haptics: on })
+    set({ haptics: on })
   },
 }))

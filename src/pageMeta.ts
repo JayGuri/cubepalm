@@ -68,6 +68,14 @@ export function pageMeta(pathname: string): PageMeta {
   if (path === '/record') {
     return { title: 'Record your hand signs | CubePalm', description: 'Record the landmarks of your hands making each sign, to help measure how well CubePalm reads them. No pictures are kept and nothing is sent.', canonical: at('/record') }
   }
+  if (path === '/how') {
+    return {
+      title: "How it works: the maths, the hand tracking and the solver | CubePalm",
+      description:
+        "How a webcam reads a finger sign, why a Rubik's Cube has 43 quintillion positions, and how a two-phase search finds a short solution and proves when it is the shortest. Interactive, with measured results.",
+      canonical: at('/how'),
+    }
+  }
   if (path === '/settings') {
     return { title: 'Settings | CubePalm', description: HOME.description, canonical: at('/settings') }
   }

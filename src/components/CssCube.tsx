@@ -1,19 +1,27 @@
 import { useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react'
 import { parseCubeMove } from '../core/animation/parseCubeMove'
+import { splitMoves } from '../core/notation'
 import { pieceBox } from '../core/puzzles/mirror/dimensions'
 import { applyMoveToPieces, createPieces, currentSlot, type Mat3, type TrackedPiece, type Vec3 } from '../core/puzzles/mirror/pieces'
+import { turnEase } from '../motion/easing'
 
 // A real, turning cube made of 26 CSS-3D cubies -- no WebGL, so it costs
 // almost nothing to load. Every layer turn is animated, and the cubies are
 // followed with the same rotation-matrix tracker the Mirror Cube uses, so
-// stickers stay on the piece they belong to.
+// stickers stay on the piece they belong to. It is the site's small cube:
+// the hero, the sign demo, the Academy's pictures of each step.
 
 export type FaceLetter = 'U' | 'R' | 'F' | 'D' | 'L' | 'B'
 export type LayerLetter = FaceLetter | 'M' | 'E' | 'S'
+export type { Vec3 }
 
 export interface CssCubeHandle {
   /** Turn a layer ("R", "U'", "F2"). Turns queue up and play one after another. */
   turn: (move: string) => Promise<void>
+  /** Play a whole sequence ("R U R' U'"), each turn after the last, at `pace` ms a turn. */
+  play: (moves: string, pace?: number) => Promise<void>
+  /** Jump, without animating, to the solved cube with `setup` applied. Cancels turns still queued. */
+  reset: (setup?: string) => void
   /** Dim everything except one layer, or pass null to clear. */
   highlight: (layer: LayerLetter | null) => void
 }
@@ -78,6 +86,8 @@ const randomScramble = () => {
   return out
 }
 
+const withSetup = (setup: string | undefined) => splitMoves(setup ?? '').reduce(applyMoveToPieces, createPieces())
+
 interface Props {
   /** Edge length of one cubie in pixels. */
   cubie?: number
@@ -89,19 +99,45 @@ interface Props {
   followPointer?: boolean
   /** "mirror" draws the Mirror Cube: one colour, every block a different size. */
   variant?: 'standard' | 'mirror'
+  /** Moves applied, without animating, to a solved cube: the position it starts in. */
+  setup?: string
+  /**
+   * The colour of each sticker, given the piece's solved place, which way the
+   * sticker faces (both in cube space, y up) and its usual colour. Return null
+   * for a blank (dark) sticker. Lets a picture grey out pieces that do not matter yet.
+   */
+  stickerColour?: (home: Vec3, normal: Vec3, colour: string) => string | null
+  /** How the cube is held when it is not tumbling: degrees about x, then y. Default: a corner toward you, top showing. */
+  view?: { x: number; y: number }
+  /** Milliseconds per quarter turn for `turn`. */
+  pace?: number
   className?: string
   ref?: Ref<CssCubeHandle>
 }
 
-export function CssCube({ cubie = 66, autoplay = false, tumble = false, followPointer = false, variant = 'standard', className = '', ref }: Props) {
+export function CssCube({
+  cubie = 66,
+  autoplay = false,
+  tumble = false,
+  followPointer = false,
+  variant = 'standard',
+  setup,
+  stickerColour,
+  view,
+  pace = 300,
+  className = '',
+  ref,
+}: Props) {
   const mirror = variant === 'mirror'
   // Where each piece's centre sits when home: a grid cell, or its own block's centre.
   const centres = useRef<Vec3[]>(HOMES.map((p) => (mirror ? pieceBox(p.home).center : p.home)))
   // Each cube tumbles at its own pace and starts at its own point in the loop.
   const [tumbleStyle] = useState(() => ({ animationDuration: '24s', animationDelay: `-${between(0, 24).toFixed(1)}s` }))
   const els = useRef<(HTMLDivElement | null)[]>([])
-  const pieces = useRef<TrackedPiece[]>(createPieces())
+  const pieces = useRef<TrackedPiece[]>(withSetup(setup))
   const queue = useRef<Promise<void>>(Promise.resolve())
+  // Bumped by reset: turns queued before it are dropped.
+  const generation = useRef(0)
   const alive = useRef(true)
   const raf = useRef(0)
   const stageRef = useRef<HTMLDivElement>(null)
@@ -119,18 +155,18 @@ export function CssCube({ cubie = 66, autoplay = false, tumble = false, followPo
     })
   }
 
-  const animate = (move: string, ms: number) =>
+  const animate = (move: string, ms: number, gen = generation.current) =>
     new Promise<void>((resolve) => {
       const t = parseCubeMove(move)
-      if (!t || !alive.current) return resolve()
+      if (!t || !alive.current || gen !== generation.current) return resolve()
       const axis = { x: 0, y: 1, z: 2 }[t.axis]
       const start = performance.now()
       const step = (now: number) => {
-        if (!alive.current) return resolve()
+        if (!alive.current || gen !== generation.current) return resolve()
         const k = Math.min(1, (now - start) / ms)
-        const ease = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2
         if (k < 1) {
-          draw({ axis, layer: t.layer, angle: t.angle * ease })
+          // Flung, a hair past the quarter turn, and back: the detent of a real cube.
+          draw({ axis, layer: t.layer, angle: t.angle * turnEase(k) })
           raf.current = requestAnimationFrame(step)
         } else {
           pieces.current = applyMoveToPieces(pieces.current, move)
@@ -141,8 +177,23 @@ export function CssCube({ cubie = 66, autoplay = false, tumble = false, followPo
       raf.current = requestAnimationFrame(step)
     })
 
+  const enqueue = (move: string, ms: number) => {
+    const gen = generation.current
+    return (queue.current = queue.current.then(() => animate(move, ms, gen)))
+  }
+
   useImperativeHandle(ref, () => ({
-    turn: (move) => (queue.current = queue.current.then(() => animate(move, 300))),
+    turn: (move) => enqueue(move, pace),
+    play: async (moves, ms = pace) => {
+      for (const m of splitMoves(moves)) await enqueue(m, ms)
+    },
+    reset: (moves) => {
+      generation.current++
+      cancelAnimationFrame(raf.current)
+      queue.current = Promise.resolve()
+      pieces.current = withSetup(moves)
+      draw()
+    },
     highlight: (letter) => {
       pieces.current.forEach((p, i) => {
         const el = els.current[i]
@@ -152,6 +203,15 @@ export function CssCube({ cubie = 66, autoplay = false, tumble = false, followPo
       })
     },
   }))
+
+  // A new starting position: jump to it.
+  useEffect(() => {
+    generation.current++
+    queue.current = Promise.resolve()
+    pieces.current = withSetup(setup)
+    draw()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setup])
 
   useEffect(() => {
     alive.current = true
@@ -168,15 +228,15 @@ export function CssCube({ cubie = 66, autoplay = false, tumble = false, followPo
         await wait(between(300, 2200))
         while (alive.current) {
           const scramble = randomScramble()
-          const pace = 270
+          const ms = 270
           for (const m of scramble) {
             await untilVisible()
-            if (alive.current) await animate(m, pace)
+            if (alive.current) await animate(m, ms)
           }
           await wait(between(900, 1500))
           for (const m of [...scramble].reverse()) {
             await untilVisible()
-            if (alive.current) await animate(invert(m), pace)
+            if (alive.current) await animate(invert(m), ms)
           }
           await wait(between(1800, 2800))
         }
@@ -225,12 +285,14 @@ export function CssCube({ cubie = 66, autoplay = false, tumble = false, followPo
     }
   }, [followPointer])
 
+  const held = !tumble && view ? { transform: `rotateX(${view.x}deg) rotateY(${view.y}deg)` } : {}
+
   return (
     <div aria-hidden ref={stageRef} className={`cc-stage ${className}`}>
       <div ref={tiltRef} className="transition-transform duration-500 ease-out" style={{ transformStyle: 'preserve-3d' }}>
         <div
           className={`cc-cube ${tumble ? 'cc-tumble' : ''}`}
-          style={{ ['--hs' as string]: `${cubie / 2}px`, ['--c' as string]: `${cubie}px`, ...(tumble ? tumbleStyle : {}) }}
+          style={{ ['--hs' as string]: `${cubie / 2}px`, ['--c' as string]: `${cubie}px`, ...(tumble ? tumbleStyle : held) }}
         >
           {mirror &&
             HOMES.map((p, i) => {
@@ -258,16 +320,17 @@ export function CssCube({ cubie = 66, autoplay = false, tumble = false, followPo
             })}
           {!mirror &&
             HOMES.map((p, i) => (
-            <div key={i} data-dim="0" className="cc-cubie" ref={(el) => void (els.current[i] = el)}>
-              {SIDES.map((s, j) => {
-                const outward = s.n.every((v, k) => v === 0 || v === p.home[k])
-                return (
-                  <div key={j} className="cc-sticker" style={{ transform: s.t }}>
-                    {outward && <span style={{ background: s.color }} />}
-                  </div>
-                )
-              })}
-            </div>
+              <div key={i} data-dim="0" className="cc-cubie" ref={(el) => void (els.current[i] = el)}>
+                {SIDES.map((s, j) => {
+                  const outward = s.n.every((v, k) => v === 0 || v === p.home[k])
+                  const colour = outward ? (stickerColour ? stickerColour(p.home, s.n, s.color) : s.color) : null
+                  return (
+                    <div key={j} className="cc-sticker" style={{ transform: s.t }}>
+                      {outward && <span style={{ background: colour ?? '#2A2C33' }} />}
+                    </div>
+                  )
+                })}
+              </div>
             ))}
         </div>
       </div>
