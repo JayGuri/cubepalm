@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { LESSONS, type Lesson } from '../core/academy/lessons'
+import type { TeachStep } from '../core/academy/teach/teach'
+import { MoveChip } from './cube/MoveChip'
 import { HAND_COLOR } from '../core/gestures/signGestures'
 import type { StageProgress } from '../core/academy/stages'
 import { useAcademyStore } from '../state/academyStore'
@@ -32,6 +34,13 @@ interface Props {
   /** A demo is playing. */
   watching: boolean
   progress: StageProgress
+  /** The practice position is a random one, not one of the fixed cases. */
+  randomPosition?: boolean
+  /** The teaching solver's current step, with how many of its quarter turns are made. */
+  teach?: { step: TeachStep; done: number; total: number } | null
+  onTeach?: () => void
+  onStopTeach?: () => void
+  onNewPosition?: () => void
   /** The moves to show as hand signs: the lesson's algorithm, or this position's solution. */
   signMoves: string
   onWatch: () => void
@@ -61,7 +70,7 @@ function More({ title, open, children, testId }: { title: string; open: boolean;
   )
 }
 
-export function LessonPanel({ lesson, index, caseNumber, done, note, guiding, watching, progress, signMoves, onWatch, onGuide, onSelectCase }: Props) {
+export function LessonPanel({ lesson, index, caseNumber, done, note, guiding, watching, progress, randomPosition, teach, onTeach, onStopTeach, onNewPosition, signMoves, onWatch, onGuide, onSelectCase }: Props) {
   const completed = useAcademyStore((s) => s.completed)
   const hasPractice = lesson.cases.length > 0
   const prev = LESSONS[index - 1]
@@ -176,8 +185,32 @@ export function LessonPanel({ lesson, index, caseNumber, done, note, guiding, wa
         )}
       </div>
 
-      {/* Wave 2: the guided-step card ("Now: bring the white-red edge down", from
-          src/core/academy/teach) goes here, between the goal and the practice controls. */}
+      {/* The guided-step card: what the teaching solver says to do now. */}
+      {teach && (
+        <section data-testid="teach-card" aria-label="Now" className="mt-3 rounded-xl bg-sticker-yellow/10 p-3 ring-1 ring-inset ring-sticker-yellow/40">
+          <p data-testid="teach-title" className="font-display text-base font-bold leading-tight text-fg">
+            Now: {teach.step.title.charAt(0).toLowerCase() + teach.step.title.slice(1)}
+          </p>
+          <p className="mt-1 text-sm leading-snug text-fg-muted">{teach.step.explain}</p>
+          <ol aria-label="Turns to make" className="mt-2 flex flex-wrap gap-1">
+            {(() => {
+              let upto = 0
+              return teach.step.moves.map((m, i) => {
+                const start = upto
+                upto += m.includes('2') ? 2 : 1
+                return (
+                  <li key={i}>
+                    <MoveChip move={m} size="sm" state={upto <= teach.done ? 'done' : start <= teach.done ? 'current' : 'idle'} />
+                  </li>
+                )
+              })
+            })()}
+          </ol>
+          <button type="button" data-testid="teach-stop" onClick={onStopTeach} className="mt-2 inline-flex min-h-9 items-center text-sm text-fg-faint underline-offset-4 hover:text-fg hover:underline pointer-coarse:min-h-11">
+            Stop guiding
+          </button>
+        </section>
+      )}
 
       {hasPractice && (
         <section className="mt-4" aria-labelledby="practice-label">
@@ -201,11 +234,24 @@ export function LessonPanel({ lesson, index, caseNumber, done, note, guiding, wa
                   {i + 1}
                 </button>
               ))}
+              {lesson.goal && (
+                <button
+                  type="button"
+                  data-testid="new-position"
+                  aria-pressed={randomPosition}
+                  onClick={onNewPosition}
+                  className={`h-9 rounded-lg px-3 text-sm font-semibold transition-[transform,background-color] duration-200 ease-click active:translate-y-px pointer-coarse:h-11 ${
+                    randomPosition ? 'sticker bg-sticker-orange text-plastic' : 'bg-raised text-fg hover:bg-[#2a2d34]'
+                  }`}
+                >
+                  New practice position
+                </button>
+              )}
             </div>
           </div>
           <p className="mt-2 text-sm text-fg-faint">Solve it on the big cube yourself, or get help:</p>
           <div className="mt-2 flex flex-wrap gap-2">
-            <button type="button" data-testid="watch-it" className={ACTION} onClick={onWatch} disabled={guiding || done} title="Plays the whole solution for you to watch">
+            <button type="button" data-testid="watch-it" className={ACTION} onClick={onWatch} disabled={guiding || done || randomPosition} title="Plays the whole solution for you to watch">
               Watch it
             </button>
             <button
@@ -213,11 +259,16 @@ export function LessonPanel({ lesson, index, caseNumber, done, note, guiding, wa
               data-testid="show-me"
               className={ACTION}
               onClick={onGuide}
-              disabled={guiding || watching || done}
+              disabled={guiding || watching || done || randomPosition}
               title="Marks each move on the cube for you to copy"
             >
               Step by step
             </button>
+            {lesson.goal && (
+              <button type="button" data-testid="teach-me" className={ACTION} onClick={onTeach} disabled={guiding || watching || done} title="Shows what to do next, from wherever the cube is">
+                Guide me through it
+              </button>
+            )}
           </div>
         </section>
       )}

@@ -20,6 +20,8 @@ import { useMoveQueue } from './play/useMoveQueue'
 import { useSolveSession } from './play/useSolveSession'
 import { lessonById, lessonIndex } from '../../core/academy/lessons'
 import { stageDone, stageProgress } from '../../core/academy/stages'
+import { practicePosition } from '../../core/academy/teach/practice'
+import { teachSolve, type TeachStep } from '../../core/academy/teach/teach'
 import { movesFromAlg } from '../../core/puzzles/cube3/logic'
 import { createFistLockState, fistLockProgress, stepFistLock } from '../../core/gestures/fistLock'
 import { DEFAULT_THRESHOLDS } from '../../core/gestures/GestureRecognizer'
@@ -268,19 +270,74 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
   const ownTurns = moveHistory.length - startLength
 
   // Put the cube in a lesson's practice position (not animated).
-  const setupCase = (i: number) => {
+  const setupCase = (i: number, setup?: string) => {
     if (!lesson) return
     stopGuide()
+    stopTeach()
     setLessonNote(null)
     setLessonDone(false)
     setWatched(false)
     flushQueue()
     reset()
-    const c = lesson.cases[i]
-    if (c) for (const m of movesFromAlg(new Alg(c.setup))) applyMove(m)
+    const start = setup ?? lesson.cases[i]?.setup
+    if (start) for (const m of movesFromAlg(new Alg(start))) applyMove(m)
     // The practice position is where the lesson starts: Undo stops here.
     markStart()
     setCaseIndex(i)
+    setRandomSetup(setup ?? null)
+  }
+
+  // A fresh, random position for this lesson (case number 0: none of the fixed ones).
+  const newPosition = () => {
+    if (lesson?.goal) setupCase(-1, practicePosition(lesson.id))
+  }
+
+  // --- Guide me through it: the teaching solver, one step at a time ---------------
+  // The step on show, and the quarter turns of it still to make. The learner's
+  // turns are matched against them; a turn that is not the one asked for, or
+  // an Undo, makes the solver look again from wherever the cube is.
+  const [randomSetup, setRandomSetup] = useState<string | null>(null)
+  const [teach, setTeachState] = useState<{ step: TeachStep; total: number; pending: string[] } | null>(null)
+  const teachRef = useRef(teach)
+  const setTeach = (t: typeof teach) => {
+    teachRef.current = t
+    setTeachState(t)
+  }
+  const teachToken = useRef(0)
+  const stopTeach = () => {
+    teachToken.current++
+    if (teachRef.current) setTeach(null)
+  }
+  // A half turn is two quarter turns that may go either way round ("F~"), so long as both go the same way.
+  const quarters = (moves: string[]) => moves.flatMap((m) => (m.includes('2') ? [`${m[0]}~`, `${m[0]}~`] : [m]))
+  const beginTeach = async (note?: string) => {
+    const token = ++teachToken.current
+    await drainQueue()
+    if (token !== teachToken.current) return
+    const { state: now } = usePuzzleStore.getState()
+    if (!now) return
+    if (lesson?.goal && stageDone(lesson.goal, now)) return setTeach(null)
+    const step = teachSolve(now)[0]
+    if (!step) return setTeach(null)
+    const pending = quarters(step.moves)
+    setTeach({ step, total: pending.length, pending })
+    setLessonNote(note ?? null)
+  }
+  // Called with each turn the learner makes, before it lands.
+  const followTeach = (move: Move) => {
+    const t = teachRef.current
+    if (!t) return
+    let pending = t.pending
+    let off = false
+    for (const q of expandSteps([move])) {
+      const p = pending[0]
+      if (!p || !(p === q || (p.endsWith('~') && p[0] === q[0]))) off = true
+      else if (p.endsWith('~') && pending[1]?.[0] === q[0] && pending[1].endsWith('~')) pending = [q, ...pending.slice(2)]
+      else pending = pending.slice(1)
+    }
+    if (off) void beginTeach('That was not the turn shown, so the guide has looked again from here.')
+    else if (!pending.length) void beginTeach()
+    else setTeach({ ...t, pending })
   }
 
   const checkLesson = () => {
@@ -289,6 +346,7 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
     if (!now) return
     const met = lesson.goal ? stageDone(lesson.goal, now) : history.length - usePuzzleStore.getState().startLength >= 4
     if (met) {
+      stopTeach()
       setLessonDone(true)
       completeLesson(lesson.id)
     }
@@ -397,6 +455,7 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
     if (solveActiveRef.current) closeSolution()
     logTurn(move, method)
     countMove(move, true)
+    followTeach(move)
     void enqueueMoves([move]).then(() => {
       checkLesson()
       checkFinish()
@@ -579,6 +638,7 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
       uncountMove(last)
       checkFinish()
     }
+    if (lesson && teachRef.current) void beginTeach()
     const g = guideRef.current
     if (!g) forgetSearch()
     if (!g || lesson || !last) return
@@ -690,9 +750,14 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
               caseNumber={caseIndex + 1}
               done={lessonDone}
               note={lessonNote ?? (watched && (!solution || solution.index >= solution.moves.length) ? 'You watched it. Press Restart position and do it yourself to finish the lesson.' : null)}
-              guiding={guideStatus !== 'off'}
+              guiding={guideStatus !== 'off' || teach !== null}
               watching={solveStatus !== 'off'}
               progress={lessonProgress}
+              randomPosition={caseIndex < 0}
+              teach={teach ? { step: teach.step, done: teach.total - teach.pending.length, total: teach.total } : null}
+              onTeach={() => void beginTeach()}
+              onStopTeach={stopTeach}
+              onNewPosition={newPosition}
               signMoves={lesson.algorithm?.moves ?? lesson.cases[caseIndex]?.solution ?? ''}
               onWatch={watchIt}
               onGuide={showMe}
@@ -726,7 +791,8 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
               onAnimationComplete={handleAnimationComplete}
               cameraLocked={cameraLocked}
               previewLayer={signsActive && heldSigns[0] ? LAYER_SLICE[heldSigns[0].layer] : null}
-              guideMove={guide ? guide.steps[guide.index] : null}
+              guideMove={guide ? guide.steps[guide.index] : (teach?.pending[0]?.replace('~', '') ?? null)}
+              focusSlots={teach ? [...teach.step.focus.pieces, ...(teach.step.focus.target ? [teach.step.focus.target] : [])] : null}
             />
 
             {/* A solve you made, or a lesson you finished: once, and briefly, under everything else on the stage. */}
@@ -804,7 +870,7 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
                 <button type="button" className={BUTTON} onClick={handleUndo} disabled={busy || moveHistory.length <= startLength}>
                   Undo
                 </button>
-                <button type="button" className={BUTTON} onClick={() => setupCase(caseIndex)} disabled={busy}>
+                <button type="button" className={BUTTON} onClick={() => setupCase(caseIndex, caseIndex < 0 ? (randomSetup ?? '') : undefined)} disabled={busy}>
                   Restart position
                 </button>
                 <Link to="/learn" className={`${BUTTON} sm:order-last`}>
