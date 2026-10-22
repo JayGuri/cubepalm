@@ -800,10 +800,13 @@ function PuzzleCanvasInner({
             fill from the side, and the studio's softboxes reflected in the
             stickers' gloss and the plastic's edges. Metal takes almost all its
             look from the reflections, so the Mirror Cube gets less direct light. */}
-        <hemisphereLight args={['#FFFFFF', '#3A3D46', isMirror ? 0.5 : 1.25]} />
-        <directionalLight position={[4, 9, 6]} intensity={isMirror ? 1.6 : 1.35} />
+        <hemisphereLight args={['#FFFFFF', '#3A3D46', isMirror ? 0.5 : 1.5]} />
+        <directionalLight position={[4, 9, 6]} intensity={isMirror ? 1.6 : 1.5} />
         <directionalLight position={[-7, 2, -3]} intensity={isMirror ? 0.5 : 0.4} />
-        <StudioEnvironment />
+        {/* Baking the reflections costs a lot where the graphics are weak (seconds, in a browser
+            with software rendering). Metal cannot do without them; a plastic cube looks nearly
+            the same with a little more direct light, so only the Mirror Cube pays. */}
+        {isMirror && <StudioEnvironment />}
         <group scale={scale}>
           <Pieces
             plugin={plugin}
