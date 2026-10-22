@@ -88,6 +88,12 @@ export function LessonPanel({ lesson, index, caseNumber, done, note, guiding, wa
   // On a phone the panel is short and scrolls by itself: bring a new
   // "complete" message or wrong-move note into view inside it.
   const alertRef = useRef<HTMLDivElement>(null)
+  // On a phone the panel scrolls inside its box: when the guide moves to a new step, show that step.
+  const teachRef = useRef<HTMLElement>(null)
+  const teachTitle = teach?.step.title
+  useEffect(() => {
+    if (teachTitle) teachRef.current?.scrollIntoView({ block: 'nearest', behavior: prefersReducedMotion() ? 'auto' : 'smooth' })
+  }, [teachTitle])
   useEffect(() => {
     if (!done && !note) return
     alertRef.current?.scrollIntoView({ block: 'nearest', behavior: prefersReducedMotion() ? 'auto' : 'smooth' })
@@ -187,7 +193,7 @@ export function LessonPanel({ lesson, index, caseNumber, done, note, guiding, wa
 
       {/* The guided-step card: what the teaching solver says to do now. */}
       {teach && (
-        <section data-testid="teach-card" aria-label="Now" className="mt-3 rounded-xl bg-sticker-yellow/10 p-3 ring-1 ring-inset ring-sticker-yellow/40">
+        <section ref={teachRef} data-testid="teach-card" aria-label="Now" className="mt-3 scroll-my-3 rounded-xl bg-sticker-yellow/10 p-3 ring-1 ring-inset ring-sticker-yellow/40">
           <p data-testid="teach-title" className="font-display text-base font-bold leading-tight text-fg">
             Now: {teach.step.title.charAt(0).toLowerCase() + teach.step.title.slice(1)}
           </p>
