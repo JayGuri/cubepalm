@@ -45,7 +45,7 @@ export function SolutionPlayer({ status, moves, index, playing, speed, steps, op
   return (
     // Its own container: the breakpoints below read this panel's actual rendered width, not the
     // stage's (the two differ once the stage places the panel in a squeezed corner).
-    <div data-testid="solution-player" className={`@container/player pointer-events-auto transition duration-300 ease-soft starting:translate-y-1 starting:opacity-0 ${className}`}>
+    <div data-testid="solution-player" className={`pointer-events-auto transition duration-300 ease-soft starting:translate-y-1 starting:opacity-0 ${className}`}>
       <div className={`flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl p-2 text-sm text-fg-muted ${PANEL}`}>
         {status === 'solving' ? (
           <span data-testid="solution-finding" className="flex min-h-10 flex-1 items-center gap-3 pl-1.5">
@@ -77,25 +77,25 @@ export function SolutionPlayer({ status, moves, index, playing, speed, steps, op
             {/* On a short landscape screen the panel's own width is squeezed well below the stage's,
                 so the chip strip (a nice-to-have beside the status text) gives way first. */}
             <div className="[@media(max-height:30rem)]:hidden">
-              <RouteStrip moves={moves} index={index} size="sm" trim={['', '@max-[24rem]/player:hidden', '@max-[40rem]/player:hidden']} />
+              <RouteStrip moves={moves} index={index} size="sm" trim={['', '@max-[24rem]:hidden', '@max-[40rem]:hidden']} />
             </div>
             {/* On a narrow stage the strip and the keys make the first line; the status its own
                 full-width line next; speed and Stop share a last line, spread apart. */}
-            <span aria-hidden className="hidden h-0 basis-full @max-[40rem]/player:block" />
+            <span aria-hidden className="hidden h-0 basis-full @max-[40rem]:block" />
 
             <button
               type="button"
               data-testid="solution-moves-toggle"
               onClick={() => setShowMoves((v) => !v)}
               aria-expanded={showMoves}
-              className="-my-1 flex min-w-0 flex-1 basis-full flex-col justify-center gap-0.5 rounded-md px-1.5 py-1 text-left leading-tight transition hover:bg-white/5 pointer-coarse:min-h-11 @min-[40rem]/player:basis-auto"
+              className="-my-1 flex min-w-0 flex-1 basis-full flex-col justify-center gap-0.5 rounded-md px-1.5 py-1 text-left leading-tight transition hover:bg-white/5 pointer-coarse:min-h-11 @min-[40rem]:basis-auto"
             >
               <span className="flex items-center gap-1.5">
                 <span className={`whitespace-nowrap ${finished ? 'font-semibold text-sticker-green' : 'text-fg'}`} data-testid="solution-progress">
                   {finished ? 'Solved' : `Move ${Math.min(index + 1, moves.length)} of ${moves.length}`}
                 </span>
                 <span className="flex items-center gap-0.5 text-xs underline decoration-white/25 underline-offset-2">
-                  <span className="@max-[40rem]/player:hidden">{showMoves ? 'Hide moves' : 'All moves'}</span>
+                  <span className="@max-[40rem]:hidden">{showMoves ? 'Hide moves' : 'All moves'}</span>
                   <svg width="9" height="9" viewBox="0 0 10 10" aria-hidden className={`transition-transform duration-300 ease-turn ${showMoves ? 'rotate-180' : ''}`}>
                     <path d="M2 3.5 5 6.5l3-3" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
@@ -113,7 +113,7 @@ export function SolutionPlayer({ status, moves, index, playing, speed, steps, op
             </button>
 
             {/* Speed and Stop: their own line on a narrow stage, spread to the far edges. */}
-            <div className="flex w-full basis-full items-center justify-between gap-2 @min-[40rem]/player:w-auto @min-[40rem]/player:basis-auto @min-[40rem]/player:justify-normal @min-[40rem]/player:contents">
+            <div className="flex w-full basis-full items-center justify-between gap-2 @min-[40rem]:w-auto @min-[40rem]:basis-auto @min-[40rem]:justify-normal @min-[40rem]:contents">
               {/* The speed: a key slides under the one chosen. */}
               <div role="group" aria-label="Speed" className="relative grid shrink-0 grid-cols-3 rounded-lg bg-plastic p-0.5 text-xs">
                 <span
@@ -134,7 +134,7 @@ export function SolutionPlayer({ status, moves, index, playing, speed, steps, op
                 ))}
               </div>
 
-              <button type="button" data-testid="solution-close" onClick={onClose} className={`${PANEL_BUTTON} @min-[40rem]/player:ml-auto`}>
+              <button type="button" data-testid="solution-close" onClick={onClose} className={`${PANEL_BUTTON} @min-[40rem]:ml-auto`}>
                 {finished ? 'Close' : 'Stop'}
               </button>
             </div>
