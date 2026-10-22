@@ -8,7 +8,6 @@
 
 import { fromOriginalFrame, toFaceTurns } from './frame'
 import {
-  buildPhase1TableStep,
   costOfPath,
   createRefineJob,
   initProofTables,
@@ -33,19 +32,6 @@ export async function initSolverCore(): Promise<void> {
 /** The optimal-search tables (under a second); built after start-up, in the background. */
 export function warmProofTables(): void {
   initProofTables()
-}
-
-/**
- * The exact phase-1 table (35 MB, a few seconds to build): a much stronger
- * lower bound than the three small tables it replaces once ready, built in
- * 40 ms slices with a timer between them so a request arriving mid-build is
- * answered on the move that is already here, not held up for it.
- */
-export function warmPhase1Table(): void {
-  const step = () => {
-    if (!buildPhase1TableStep(40)) setTimeout(step, 0)
-  }
-  step()
 }
 
 export function isSolverReady(): boolean {

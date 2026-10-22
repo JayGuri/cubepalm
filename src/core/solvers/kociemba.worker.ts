@@ -1,5 +1,5 @@
 /// <reference lib="webworker" />
-import { initSolverCore, newScrambleAlg, Refiner, solveScrambleDetailed, warmPhase1Table, warmProofTables, type RefineStep, type SolveOptions, type SolveResult } from './kociembaCore'
+import { initSolverCore, newScrambleAlg, Refiner, solveScrambleDetailed, warmProofTables, type RefineStep, type SolveOptions, type SolveResult } from './kociembaCore'
 
 // Thin shim over the pure core: all real logic (and all the tests) live there.
 export type SolverRequest =
@@ -63,13 +63,9 @@ self.onmessage = async (e: MessageEvent<SolverRequest>) => {
     if (request.type === 'init') {
       await initSolverCore()
       self.postMessage({ id, ok: true } satisfies SolverResponse)
-      // The optimal-search tables and the exact phase-1 table are only needed
-      // later; build them now, while nobody is waiting on the worker. Helper
-      // workers (proofs: false) skip both to stay light.
-      if (request.proofs !== false) {
-        setTimeout(warmProofTables, 0)
-        setTimeout(warmPhase1Table, 0)
-      }
+      // The optimal-search tables are only needed later; build them now, while
+      // nobody is waiting on the worker.
+      if (request.proofs !== false) setTimeout(warmProofTables, 0)
       return
     }
     if (request.type === 'cancel') {
