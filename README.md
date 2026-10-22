@@ -99,7 +99,8 @@ An open hand moving orbits the camera, two open hands spreading zoom it, and a c
 - **Proving it is the shortest.** A second search works through every cheaper possibility in order. If it finds one, that is the shortest route there is; if it rules them all out, the route in hand is proven shortest. That takes a blink near the end of a solve and would take hours on a fully scrambled cube, so the guide says "shortest possible" only when it has the proof.
 - **Scrambling fairly.** Every scramble is one of the 43 quintillion possible cubes, picked with equal chance, the same way competition scramblers work.
 - **The Mirror Cube.** Each block remembers where it is and which way it is rotated, so the shape of the whole cube *is* the puzzle state.
-- **Teaching.** Each lesson is a question asked of the cube ("are all four white edges in place?"), checked live to fill the progress bar.
+- **Teaching.** Each lesson is a question asked of the cube ("are all four white edges in place?"), checked live to fill the progress bar. A teaching solver (`src/core/academy/teach/`) solves any cube with the same layer-by-layer method, one explained step at a time, so a lesson can deal a fresh random practice position and guide a beginner through it, lighting the pieces in play and dimming the rest. It is tested against thousands of random cubes.
+- **Seeing it.** The site has a page, [How it works](https://cubepalm.vercel.app/how), that runs the real code: pose a model hand and watch both sign readers read it, run the solver and chart its route shrinking, and draw fair scrambles.
 
 ## What it needs, and what happens when it doesn't get it
 
