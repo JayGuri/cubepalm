@@ -479,6 +479,19 @@ code is gone, so unlike the measurements below it cannot be re-run), because two
 shortest over every stretch that short. Stretches long enough to matter are too
 slow to prove. It was removed rather than kept as dead weight.
 
+**A second thing that did not help.** The first phase searches with three
+pruning tables built from small coordinates. A stronger one is the exact table
+over the flip, the slice and the twist together (about 38.7 MB), which needs the
+cube's symmetries to be reduced to fit. It was built and compared with the
+shipped solver on 12 identical seeded random cubes, in one process: the first
+route averaged 31.17 quarter turns against 29.50 and took 131 ms against 57; the
+route after half a second averaged 25.83 against 25.50; and building the tables
+took 4.4 s against 2.0 s. It also failed the project's own regression test on
+mean route length. Larger tables cost more to build and to search through than
+the tighter bound saved, so it was removed. These are single measurements on a
+busy machine; the differences in route length and time were all in the same
+direction.
+
 ### Random scrambles
 
 A scramble is not a random string of moves, which would favour some cubes over
