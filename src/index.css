@@ -81,11 +81,279 @@
 html {
   background: #16171b;
   color: #eceae4;
+  /* Scrollbars in the cube's own plastic, not the system's grey. */
+  scrollbar-color: #3a3c44 #0e0f13;
 }
 
 :focus-visible {
   outline: 2px solid #ffd500;
   outline-offset: 2px;
+}
+/* A page's heading takes focus after a page turn, for screen readers; it is not a control. */
+main h1[tabindex='-1']:focus,
+main[tabindex='-1']:focus {
+  outline: none;
+}
+
+::selection {
+  background: rgb(255 213 0 / 0.85);
+  color: #0e0f13;
+}
+
+/* ---- The shell: header, menu, page turns. In the components layer, so a
+   utility such as md:hidden on one of these still wins. ---- */
+@layer components {
+
+/* The header's six places: stickers on a strip of black plastic. The face you
+   are on is lit; the others sit in shadow, and come up a little when reached for. */
+.face-row {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--color-plastic);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.05),
+    0 1px 0 rgb(0 0 0 / 0.35);
+}
+.face-tab {
+  display: grid;
+  place-items: center;
+  min-width: 3.6rem;
+  min-height: 2.25rem;
+  padding-inline: 0.65rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--color-fg-muted);
+  background: color-mix(in srgb, var(--face) 13%, #121317);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.05),
+    inset 0 -2px 0 rgb(0 0 0 / 0.3);
+  transition:
+    background-color 180ms,
+    color 180ms,
+    box-shadow 180ms,
+    translate 260ms var(--ease-click);
+}
+@media (pointer: coarse) {
+  .face-tab {
+    min-height: 2.75rem;
+  }
+}
+.face-tab:hover {
+  color: var(--color-fg);
+  background: color-mix(in srgb, var(--face) 26%, #121317);
+}
+.face-tab[aria-current='page'] {
+  color: var(--color-plastic);
+  background: var(--face);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.28),
+    inset 0 -3px 0 rgb(0 0 0 / 0.18);
+}
+/* Pressed in: the sticker sinks and its lip all but goes. */
+.face-tab:active {
+  translate: 0 1px;
+  box-shadow: inset 0 -1px 0 rgb(0 0 0 / 0.3);
+  transition-duration: 60ms;
+}
+
+/* The menu button: a face of nine stickers on a square of plastic. */
+.menu-button {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 10px;
+  color: var(--color-fg-muted);
+  background: var(--color-plastic);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.06),
+    0 1px 0 rgb(0 0 0 / 0.35);
+  transition:
+    color 160ms,
+    translate 240ms var(--ease-click);
+}
+@media (pointer: coarse) {
+  .menu-button {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+}
+.menu-button:hover {
+  color: var(--color-fg);
+}
+.menu-button:active {
+  translate: 0 1px;
+}
+.menu-glyph {
+  display: grid;
+  grid-template-columns: repeat(3, 6px);
+  gap: 2px;
+}
+.menu-glyph > span {
+  width: 6px;
+  height: 6px;
+  border-radius: 1.5px;
+  background: currentColor;
+}
+
+/* What it opens: the cube unfolded on a darkened table. */
+.site-menu {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 1rem;
+  border: 0;
+  background: transparent;
+  color: var(--color-fg);
+  overflow: auto;
+}
+.site-menu[open] {
+  display: grid;
+  place-items: center;
+}
+.site-menu::backdrop {
+  background: transparent;
+}
+.menu-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgb(10 11 14 / 0.9);
+}
+.site-menu .menu-close {
+  position: fixed;
+  color: var(--color-fg);
+}
+.cube-net {
+  --g: 6px;
+  --s: min(calc((100vw - 2rem - 2 * var(--g)) / 3), calc((100dvh - 9rem - 3 * var(--g)) / 4), 7.5rem);
+  position: relative;
+  display: grid;
+  gap: var(--g);
+  grid-template-columns: repeat(3, var(--s));
+  grid-template-rows: repeat(4, var(--s));
+  grid-template-areas:
+    '. U .'
+    'L F R'
+    '. D .'
+    '. B .';
+  /* Looked at straight on, from in front of the front face. */
+  perspective: 900px;
+  perspective-origin: 50% 37.5%;
+}
+@media (orientation: landscape) {
+  .cube-net {
+    --s: min(calc((100vw - 2rem - 3 * var(--g)) / 4), calc((100dvh - 2rem - 2 * var(--g)) / 3), 7.5rem);
+    grid-template-columns: repeat(4, var(--s));
+    grid-template-rows: repeat(3, var(--s));
+    grid-template-areas:
+      '. U . .'
+      'L F R B'
+      '. D . .';
+    perspective-origin: 37.5% 50%;
+  }
+}
+.cube-net > li {
+  backface-visibility: hidden;
+}
+/* A face: nine stickers in its colour on black plastic, its name on a label across the middle. */
+.net-face {
+  position: relative;
+  display: block;
+  height: 100%;
+  padding: 6%;
+  border-radius: 13%;
+  background: var(--color-plastic);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06);
+  transition: translate 260ms var(--ease-click);
+}
+.net-face:hover {
+  translate: 0 -2px;
+}
+.net-face:active {
+  translate: 0 1px;
+  transition-duration: 60ms;
+}
+.net-stickers {
+  display: grid;
+  grid-template: repeat(3, 1fr) / repeat(3, 1fr);
+  gap: 5%;
+  height: 100%;
+}
+.net-stickers > span {
+  border-radius: 20%;
+  background: var(--face);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.28),
+    inset 0 -3px 0 rgb(0 0 0 / 0.18);
+}
+.net-label {
+  position: absolute;
+  inset-inline: 10%;
+  top: 50%;
+  translate: 0 -50%;
+  padding: 0.4em 0.2em;
+  border-radius: 7px;
+  background: var(--color-plastic);
+  color: var(--color-fg);
+  font-size: clamp(0.8rem, calc(var(--s) * 0.15), 1rem);
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+}
+/* The face you are on: its label lit in its own colour. */
+.net-face[aria-current='page'] .net-label {
+  background: var(--face);
+  color: var(--color-plastic);
+  box-shadow: 0 0 0 2px var(--color-plastic);
+}
+
+/* A page turn: the page you leave turns away round the cube's middle, and the
+   next turns in and settles with the detent. --turn is 1 to the right, -1 back. */
+::view-transition-image-pair(root) {
+  perspective: 1800px;
+}
+html[data-turn] ::view-transition-old(root),
+html[data-turn] ::view-transition-new(root) {
+  transform-origin: 50% 50% -50vw;
+  mix-blend-mode: normal;
+  backface-visibility: hidden;
+}
+html[data-turn] ::view-transition-old(root) {
+  animation: page-turn-out 190ms cubic-bezier(0.5, 0, 0.9, 0.6) both;
+}
+html[data-turn] ::view-transition-new(root) {
+  animation: page-turn-in 320ms var(--ease-turn) both;
+}
+@keyframes page-turn-out {
+  to {
+    transform: rotateY(calc(var(--turn) * -9deg));
+    opacity: 0;
+  }
+}
+@keyframes page-turn-in {
+  from {
+    transform: rotateY(calc(var(--turn) * 9deg));
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
 }
 
 @media (prefers-reduced-motion: reduce) {

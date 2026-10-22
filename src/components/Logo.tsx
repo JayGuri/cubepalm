@@ -54,7 +54,9 @@ function LogoMark({ size = 36 }: { size?: number }) {
 export function Logo({ to = '/', size = 36, iconOnlyOnPhone = false }: { to?: string; size?: number; iconOnlyOnPhone?: boolean }) {
   return (
     <Link to={to} className="group inline-flex items-center gap-3 pointer-coarse:min-h-11 pointer-coarse:min-w-11" aria-label="CubePalm, home">
-      <span className="transition-transform duration-300 group-hover:-rotate-12 group-hover:scale-110">
+      {/* Seen corner-on, the cube turned a third of the way round its corner looks the same,
+          with its faces swapped: a real turn, and the outline never moves. */}
+      <span className="transition-transform duration-420 ease-turn group-hover:rotate-120 group-focus-visible:rotate-120">
         <LogoMark size={size} />
       </span>
       <span className={`font-display font-extrabold lowercase leading-none tracking-tight ${iconOnlyOnPhone ? 'max-[520px]:hidden' : ''}`} style={{ fontSize: size * 0.78 }}>

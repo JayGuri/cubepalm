@@ -1,0 +1,43 @@
+/* The Academy: /learn and the lesson column. */
+
+/* The primer's cube turns round to show the face being turned, like a hand
+   turning the whole cube, instead of jumping there. */
+.academy-primer .cc-cube {
+  transition: transform 460ms var(--ease-soft);
+}
+
+/* The primer arrives like a panel set down: no visible overshoot. Leaving is instant. */
+.academy-dialog[open] {
+  animation: academy-arrive 280ms var(--ease-soft);
+}
+.academy-dialog[open]::backdrop {
+  animation: academy-fade 200ms ease-out;
+}
+@keyframes academy-arrive {
+  from { opacity: 0; transform: translateY(10px); }
+}
+@keyframes academy-fade {
+  from { opacity: 0; }
+}
+
+/* Disclosure rows: a chevron that turns a quarter turn when opened. */
+.academy-more > summary {
+  list-style: none;
+  cursor: pointer;
+}
+.academy-more > summary::-webkit-details-marker {
+  display: none;
+}
+.academy-more > summary .academy-chevron {
+  transition: transform 240ms var(--ease-turn);
+}
+.academy-more[open] > summary .academy-chevron {
+  transform: rotate(90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .academy-dialog[open],
+  .academy-dialog[open]::backdrop {
+    animation: none;
+  }
+}

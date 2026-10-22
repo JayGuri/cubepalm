@@ -1,13 +1,14 @@
 import { Alg } from 'cubing/alg'
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { GuidePanel, HandsKey, SignsHud } from '../HandsGuide'
 import { LessonPanel } from '../LessonPanel'
-import { Logo } from '../Logo'
 import { PuzzleCanvas } from '../PuzzleCanvas'
 import { SolutionPlayer, type PlaybackSpeed } from '../SolutionPlayer'
-import { BUTTON } from './play/buttonStyles'
+import { BUTTON, KEY_SURFACE, STICKER, WELL } from './play/buttonStyles'
 import { CameraPanel } from './play/CameraPanel'
+import { FaceGlyph } from './play/FaceGlyph'
+import { LockBadge, PlayHeader, type InputMode } from './play/PlayHeader'
 import { MovePad } from './play/MovePad'
 import { ScrambleDialog } from './play/ScrambleDialog'
 import { PlayActions } from './play/PlayActions'
@@ -41,13 +42,26 @@ import { getSolverError, getSolverStatus, quarterTurns, retrySolver, subscribeSo
 import { useAcademyStore } from '../../state/academyStore'
 import { TURN_MS, useSettingsStore } from '../../state/settingsStore'
 import { dominantMethod, flushUsage, recordUsage, type InputMethod } from '../../state/usageLog'
+import { applyColorblindPaletteToColors } from '../../core/puzzles/colorblindPalette'
 
-type InputMode = 'mouse' | 'hands'
+// Each place wears its face's colour: the 3x3 green, the Mirror Cube blue, a lesson orange.
+// The Mirror Cube has no colours, so its unsolved face is uneven shades of its one colour.
+const MIRROR_SHADES = ['#c9d6f2', '#8eaaf0', '#3d64b8', '#a9bdf0', '#4a73cf', '#d9e2f5', '#6f93e6', '#2f4f99']
+const FACE_OF = {
+  cube3: { colour: STICKER.green, bg: 'bg-sticker-green' },
+  mirror: { colour: STICKER.blue, bg: 'bg-sticker-blue', mixed: MIRROR_SHADES },
+  lesson: { colour: STICKER.orange, bg: 'bg-sticker-orange' },
+}
 
-// The two halves of the Mouse/Touch vs Hands switch.
-const MODE = 'min-h-8 rounded-full px-3.5 transition active:scale-[0.97] pointer-coarse:min-h-11 max-[22rem]:px-3'
-const MODE_ON = 'bg-[#FFD500] font-semibold text-[#16171B]'
-const MODE_OFF = 'text-[#B2B0B9] hover:text-[#ECEAE4]'
+// The slot of each face's centre on the cube, for the colour it shows.
+const CENTRE_SLOTS: [string, string][] = [
+  ['R', 'cube3-slot-1_0_0'],
+  ['L', 'cube3-slot--1_0_0'],
+  ['U', 'cube3-slot-0_1_0'],
+  ['D', 'cube3-slot-0_-1_0'],
+  ['F', 'cube3-slot-0_0_1'],
+  ['B', 'cube3-slot-0_0_-1'],
+]
 
 // The Academy holds the cube with white at the bottom. That is the same cube
 // turned over, so only the colours shown change: white and yellow trade
@@ -93,6 +107,27 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
   const gestures = useHandGestures({ enabled: inputMode === 'hands', thresholds })
 
   const solved = status === 'ready' && isSolved()
+  const face = lesson ? FACE_OF.lesson : puzzleId === 'mirror' ? FACE_OF.mirror : FACE_OF.cube3
+
+  // Each face's centre colour as the cube shows it (lessons turn it over, the colour-blind
+  // palette swaps hues), for the turn keys and the scramble keys. Slice turns move centres,
+  // so the pad reads them from the cube; the dialog always starts from a solved cube.
+  const shown = useCallback(
+    (hex: string) => {
+      const c = lesson ? (FLIP_COLORS[hex] ?? hex) : hex
+      return colorblindPalette ? applyColorblindPaletteToColors({ c }).c : c
+    },
+    [lesson, colorblindPalette],
+  )
+  const centreColours = useMemo(() => {
+    if (!plugin || !state || plugin.id !== 'cube3') return null
+    const all = plugin.faceletColors(state)
+    return Object.fromEntries(CENTRE_SLOTS.map(([f, slot]) => [f, shown(all.get(slot)?.[f] ?? '#000000')]))
+  }, [plugin, state, shown])
+  const solvedColours = useMemo(
+    () => (plugin?.id === 'cube3' ? Object.fromEntries(Object.entries(plugin.colorScheme).map(([f, hex]) => [f, shown(hex)])) : null),
+    [plugin, shown],
+  )
 
   const fistLockRef = useRef(createFistLockState())
   const [lockHoldProgress, setLockHoldProgress] = useState(0)
@@ -630,71 +665,19 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
   } [@media(max-height:30rem)]:@min-[40rem]:left-0 [@media(max-height:30rem)]:@min-[40rem]:max-w-[calc(50%-6rem)] [@media(max-height:30rem)]:@min-[40rem]:translate-x-0`
 
   return (
-    <main className="flex h-dvh flex-col overflow-hidden bg-[#16171B] text-[#ECEAE4]">
-      <header className="flex shrink-0 items-center gap-3 border-b border-white/[0.07] px-3 py-3 pointer-coarse:py-2 sm:px-6 sm:py-3.5 [@media(max-height:30rem)]:py-1.5">
-        <Logo size={34} iconOnlyOnPhone />
-        <div className="flex min-w-0 items-center gap-3 max-sm:hidden">
-        <span className="text-white/20" aria-hidden>
-          /
-        </span>
-        {lesson ? (
-          <>
-            <Link to="/learn" className="text-sm text-[#9C9AA3] hover:text-[#ECEAE4]">
-              Learn
-            </Link>
-            <span className="text-white/20" aria-hidden>
-              /
-            </span>
-            <span className="text-sm text-[#9C9AA3]">{lesson.title}</span>
-          </>
-        ) : (
-          <h1 className="text-sm text-[#9C9AA3]">{plugin?.displayName ?? puzzleId}</h1>
-        )}
-        </div>
+    <main className="flex h-dvh flex-col overflow-hidden bg-ink text-fg">
+      <PlayHeader
+        lesson={lesson}
+        title={plugin?.displayName ?? puzzleId}
+        place={face.bg}
+        inputMode={inputMode}
+        onInputMode={setInputMode}
+        touchScreen={touchScreen}
+        cameraLocked={cameraLocked}
+        onToggleLock={toggleCameraLock}
+      />
 
-        <div className="ml-auto flex items-center gap-2 sm:gap-3">
-          <div role="group" aria-label="Control with" className="flex rounded-full bg-[#202227] p-1 text-sm pointer-coarse:p-0.5">
-            <button
-              type="button"
-              data-testid="input-mode-mouse"
-              aria-pressed={inputMode === 'mouse'}
-              onClick={() => setInputMode('mouse')}
-              className={`${MODE} ${inputMode === 'mouse' ? MODE_ON : MODE_OFF}`}
-            >
-              {touchScreen ? 'Touch' : 'Mouse'}
-            </button>
-            <button
-              type="button"
-              data-testid="input-mode-hands"
-              aria-pressed={inputMode === 'hands'}
-              onClick={() => setInputMode('hands')}
-              className={`${MODE} ${inputMode === 'hands' ? MODE_ON : MODE_OFF}`}
-            >
-              Hands
-            </button>
-          </div>
-          <button
-            type="button"
-            data-testid="camera-lock"
-            aria-pressed={cameraLocked}
-            onClick={toggleCameraLock}
-            title="Freeze the view so the cube stays put (Space, or hold a fist)"
-            className={`inline-flex min-h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 text-sm transition active:scale-[0.97] pointer-coarse:min-h-11 ${
-              cameraLocked
-                ? 'border-[#F5B83D] bg-[#F5B83D]/15 text-[#F5B83D]'
-                : 'border-white/10 text-[#B2B0B9] hover:border-white/25 hover:text-[#ECEAE4]'
-            }`}
-          >
-            <svg width="11" height="13" viewBox="0 0 12 14" aria-hidden className="max-[22rem]:hidden">
-              <rect x="1" y="6" width="10" height="7.5" rx="2" fill={cameraLocked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.4" />
-              <path d={cameraLocked ? 'M3.5 6V4.5a2.5 2.5 0 0 1 5 0V6' : 'M3.5 6V4.5a2.5 2.5 0 0 1 5 0'} fill="none" stroke="currentColor" strokeWidth="1.4" />
-            </svg>
-            {cameraLocked ? 'View locked' : 'Lock view'}
-          </button>
-        </div>
-      </header>
-
-      {status === 'loading' && <p className="p-6 text-[#9C9AA3]">Loading the cube…</p>}
+      {status === 'loading' && <p className="p-6 text-fg-faint">Loading the cube…</p>}
       {status === 'error' && <p className="p-6 text-[#EF4444]">{error}</p>}
 
       {status === 'ready' && plugin && state && (
@@ -720,7 +703,7 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
               its lower edge says there is more below. */}
           {lesson && (
             <div aria-hidden className="pointer-events-none relative h-0 shrink-0 md:hidden">
-              <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-[#1B1D22] to-transparent" />
+              <div className="absolute inset-x-0 bottom-0 h-10 bg-linear-to-t from-panel to-transparent" />
             </div>
           )}
           <div className="@container relative min-h-0 w-full flex-1 overflow-hidden">
@@ -746,6 +729,11 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
               guideMove={guide ? guide.steps[guide.index] : null}
             />
 
+            {/* A solve you made, or a lesson you finished: once, and briefly, under everything else on the stage. */}
+            {((timer.end !== null && solved) || lessonDone) && (
+              <SolvedBurst key={timer.end ?? 'lesson'} colour={face.colour} label={lessonDone ? 'Lesson complete' : 'Solved'} />
+            )}
+
             {showMouseTips && <MouseTips onClose={tips.dismiss} mirror={plugin.id === 'mirror'} />}
             {!lesson && inputMode === 'mouse' && !tips.open && !panelOpen && <TipsButton onClick={tips.show} />}
 
@@ -759,14 +747,11 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
               <button
                 type="button"
                 onClick={() => setShowHandsHelp(true)}
-                className="absolute left-3 top-3 inline-flex min-h-9 items-center rounded-full border border-white/10 bg-[#202227] px-3.5 text-sm text-[#B2B0B9] transition hover:border-white/25 hover:text-[#ECEAE4] active:scale-[0.97] pointer-coarse:min-h-11 sm:left-4 sm:top-4"
+                className={`absolute left-3 top-3 inline-flex min-h-9 items-center rounded-lg px-3.5 text-sm font-medium transition duration-200 ease-click pointer-coarse:min-h-11 sm:left-4 sm:top-4 ${KEY_SURFACE}`}
               >
                 Show hand signs
               </button>
             )}
-
-            {/* A solve you made, or a lesson you finished: once, and briefly. */}
-            {((timer.end !== null && solved) || lessonDone) && <SolvedBurst key={timer.end ?? 'lesson'} />}
 
             {/* What sits over the bottom of the stage, stacked so nothing covers anything else: the
                 signs being held, the view lock, and (on a phone) the guide or the solution player.
@@ -774,34 +759,7 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
             <div className="pointer-events-none absolute inset-3 z-10 flex flex-col items-center justify-end gap-2 sm:inset-4">
               {signsActive && heldSigns.length > 0 && <SignsHud signs={heldSigns} />}
 
-              {(cameraLocked || lockHoldProgress > 0) && (
-                <div
-                  data-testid="lock-badge"
-                  className="flex items-center gap-2 self-start rounded-full border border-[#F5B83D]/40 bg-[#16171B]/90 px-3 py-1 text-sm text-[#F5B83D] transition duration-200 starting:opacity-0"
-                >
-                  {lockHoldProgress > 0 ? (
-                    <svg width="14" height="14" viewBox="0 0 20 20" aria-hidden>
-                      <circle cx="10" cy="10" r="8" fill="none" stroke="#F5B83D33" strokeWidth="3" />
-                      <circle
-                        cx="10"
-                        cy="10"
-                        r="8"
-                        fill="none"
-                        stroke="#F5B83D"
-                        strokeWidth="3"
-                        strokeDasharray={`${lockHoldProgress * 50.3} 50.3`}
-                        transform="rotate(-90 10 10)"
-                      />
-                    </svg>
-                  ) : (
-                    <svg width="12" height="14" viewBox="0 0 12 14" aria-hidden>
-                      <rect x="1" y="6" width="10" height="7.5" rx="2" fill="currentColor" />
-                      <path d="M3.5 6V4.5a2.5 2.5 0 0 1 5 0V6" fill="none" stroke="currentColor" strokeWidth="1.6" />
-                    </svg>
-                  )}
-                  {lockHoldProgress > 0 ? (cameraLocked ? 'Keep holding to unlock…' : 'Keep holding to lock…') : 'View locked'}
-                </div>
-              )}
+              {(cameraLocked || lockHoldProgress > 0) && <LockBadge locked={cameraLocked} hold={lockHoldProgress} />}
 
               {guideStatus !== 'off' && (
                 <GuidePanel
@@ -837,34 +795,40 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
           </div>
 
           {touchScreen && inputMode === 'mouse' && (
-            <MovePad disabled={busy} hint={guideStatus === 'following' && guide ? guide.steps[guide.index] : null} onTurn={(notation) => userMove({ alg: new Alg(notation), snapAngleDeg: plugin.snapAngleDeg }, 'buttons')} />
+            <MovePad disabled={busy} colours={centreColours} hint={guideStatus === 'following' && guide ? guide.steps[guide.index] : null} onTurn={(notation) => userMove({ alg: new Alg(notation), snapAngleDeg: plugin.snapAngleDeg }, 'buttons')} />
           )}
 
           {lesson ? (
-            <footer className="flex shrink-0 flex-wrap items-center gap-2 border-t border-white/[0.07] px-4 py-3 sm:gap-3 sm:px-6">
-              <button type="button" className={BUTTON} onClick={handleUndo} disabled={busy || moveHistory.length <= startLength}>
-                Undo
-              </button>
-              <button type="button" className={BUTTON} onClick={() => setupCase(caseIndex)} disabled={busy}>
-                Restart position
-              </button>
-              <div className="mx-auto flex items-center gap-3 text-sm">
-                <span
-                  data-testid="lesson-status"
-                  className={`rounded-full px-3 py-1 font-semibold ${lessonDone ? 'bg-[#2FB36B]/15 text-[#4ED48A]' : 'bg-white/5 text-[#9C9AA3]'}`}
-                >
-                  {lessonDone ? 'Complete' : watched ? 'Watched' : 'In progress'}
-                </span>
-                {/* Your own turns only: not the ones that set the position up, nor a demo's. */}
-                {!watched && (
-                  <span className="tabular-nums text-[#9C9AA3]" data-testid="move-count">
-                    {ownTurns} {ownTurns === 1 ? 'move' : 'moves'}
-                  </span>
-                )}
+            <footer className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 bg-panel px-3 py-2.5 shadow-[inset_0_1px_0_rgb(255_255_255/0.05)] sm:px-6 sm:py-3">
+              <div className="grid flex-1 grid-cols-[1fr_1.4fr_1.4fr] gap-1.5 sm:contents">
+                <button type="button" className={BUTTON} onClick={handleUndo} disabled={busy || moveHistory.length <= startLength}>
+                  Undo
+                </button>
+                <button type="button" className={BUTTON} onClick={() => setupCase(caseIndex)} disabled={busy}>
+                  Restart position
+                </button>
+                <Link to="/learn" className={`${BUTTON} sm:order-last`}>
+                  All lessons
+                </Link>
               </div>
-              <Link to="/learn" className={BUTTON}>
-                All lessons
-              </Link>
+              {/* How this attempt at the lesson stands: above the keys on a phone, between them on a wider screen. */}
+              <div className="order-first flex w-full justify-center sm:order-none sm:mx-auto sm:w-auto">
+                <div className={`flex min-h-10 items-center gap-3 rounded-lg px-3 py-1 text-xs sm:text-sm ${WELL}`}>
+                  <span data-testid="lesson-status" className={`flex items-center gap-2 font-semibold ${lessonDone ? 'text-fg' : 'text-fg-muted'}`}>
+                    <FaceGlyph mode={lessonDone ? 'solved' : 'scrambled'} colour={face.colour} />
+                    {lessonDone ? 'Complete' : watched ? 'Watched' : 'In progress'}
+                  </span>
+                  {/* Your own turns only: not the ones that set the position up, nor a demo's. */}
+                  {!watched && (
+                    <>
+                      <span aria-hidden className="h-4 w-px bg-white/10" />
+                      <span className="tabular-nums text-fg-faint" data-testid="move-count">
+                        <span className="font-semibold text-fg">{ownTurns}</span> {ownTurns === 1 ? 'move' : 'moves'}
+                      </span>
+                    </>
+                  )}
+                </div>
+              </div>
             </footer>
           ) : (
           <PlayActions
@@ -885,6 +849,7 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
             assisted={assisted}
             newBest={newBest}
             best={best}
+            face={face}
             onScramble={() => void handleScramble()}
             onUndo={handleUndo}
             onReset={handleReset}
@@ -896,6 +861,7 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
           {scrambleDialogOpen && (
             <ScrambleDialog
               initial={scrambleText}
+              colours={solvedColours}
               onRandom={() => plugin.scramble().then((moves) => moves.map((m) => m.alg.toString()))}
               onUse={(notation) => {
                 setScrambleDialogOpen(false)
@@ -905,9 +871,9 @@ export function FreePlay({ lessonId }: { lessonId?: string } = {}) {
             />
           )}
 
-          {(error || queueError) && <p className="px-6 pb-3 text-sm text-[#EF4444]">{error || queueError}</p>}
+          {(error || queueError) && <p className="bg-panel px-6 pb-3 text-sm text-[#FF8A9A]">{error || queueError}</p>}
           {solverStatus === 'failed' && (
-            <p className="flex flex-wrap items-center gap-3 px-6 pb-3 text-sm text-[#F5B83D]" data-testid="solver-failed">
+            <p className="flex flex-wrap items-center gap-3 bg-panel px-6 pb-3 text-sm text-sticker-yellow" data-testid="solver-failed">
               The solver could not start, so Scramble, Guide me and Solve for me are off. You can still turn the cube and set up a scramble of your own.
               <button type="button" className={BUTTON} onClick={() => void retrySolver().catch(() => undefined)} title={getSolverError() ?? undefined}>
                 Try again

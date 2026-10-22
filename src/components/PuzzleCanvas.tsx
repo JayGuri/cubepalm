@@ -1,8 +1,10 @@
 import { OrbitControls } from '@react-three/drei'
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
-import { memo, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
 import { parseCubeMove } from '../core/animation/parseCubeMove'
+import { turnLanded } from '../core/feel/turnFeel'
 import { moveFromDrag, AXIS_INDEX, type Axis, type DragInput } from '../core/gestures/MouseDragAdapter'
 import type { GestureFeed } from '../core/gestures/useHandGestures'
 import { MoveArrow } from './MoveArrow'
@@ -11,8 +13,11 @@ import { pieceBox } from '../core/puzzles/mirror/geometry'
 import { currentSlot, mirrorPiecesOf } from '../core/puzzles/mirror/pieces'
 import { applyColorblindPaletteToColors } from '../core/puzzles/colorblindPalette'
 import type { Move, PuzzleMesh, PuzzlePlugin, PuzzleState } from '../core/puzzles/PuzzlePlugin'
+import { softEase, turnEase } from '../motion/easing'
+import { prefersReducedMotion } from '../motion/stagger'
 
-const PLASTIC = '#14161F'
+type Slot = [number, number, number]
+
 // Fraction of each piece's own slot distance from centre used as its visual
 // gap offset (see the render loop below) -- proportional, not a fixed unit
 // count, so it looks right across cube3's ~1.5-unit half-extent and
@@ -28,13 +33,18 @@ const AXIS_VECTOR: Record<Axis, THREE.Vector3> = {
   z: new THREE.Vector3(0, 0, 1),
 }
 const IDENTITY_QUATERNION = new THREE.Quaternion()
-const DIM_TOWARD = new THREE.Color('#16171B')
-const dim = (hex: string) => `#${new THREE.Color(hex).lerp(DIM_TOWARD, 0.3).getHexString()}`
 
-// ---- The 3x3's look: a dark plastic cubie with a rounded sticker on each outer
-// face, like a real cube. Every cubie shares one body material and one sticker
-// shape, and stickers of the same colour share a material, so the whole cube is
-// a handful of materials instead of the 182 it used to create.
+// Pieces out of focus (not in the layer a hand sign has picked, or not among
+// the lesson's pieces) sink back toward the dark plastic, keeping their hue so
+// the colours can still be read. Dimming fades in and out rather than snapping.
+const DIM_TOWARD = new THREE.Color('#1A1B20')
+const DIM_STRENGTH = 0.58
+const DIM_FADE_MS = 200
+
+// ---- The 3x3's look: a moulded black plastic cubie with rounded edges that
+// catch the light, and a thin glossy sticker with rounded corners on each outer
+// face. The bodies share one geometry and one material; each sticker has its
+// own material only so it can fade in and out of focus on its own.
 const STICKER_SIZE = 0.86
 const STICKER_RADIUS = 0.15
 // Just proud of the body's surface, so the two never fight for the same depth.
@@ -68,66 +78,54 @@ function stickerGeometry(): THREE.ShapeGeometry {
   return stickerShape
 }
 
-const stickerMaterials = new Map<string, THREE.MeshStandardMaterial>()
-function stickerMaterial(hex: string): THREE.MeshStandardMaterial {
-  let material = stickerMaterials.get(hex)
-  if (!material) {
-    material = new THREE.MeshStandardMaterial({ color: hex, roughness: 0.42, metalness: 0 })
-    stickerMaterials.set(hex, material)
-  }
-  return material
+// Vinyl with a faint gloss: the studio's softboxes slide across it as it turns.
+const newStickerMaterial = () => new THREE.MeshStandardMaterial({ roughness: 0.3, metalness: 0, envMapIntensity: 0.55 })
+
+let cubieShape: RoundedBoxGeometry | null = null
+// Drawn only: the pointer still hits the plugin's own square box (see Pieces).
+function cubieGeometry(): RoundedBoxGeometry {
+  cubieShape ??= new RoundedBoxGeometry(1, 1, 1, 3, 0.085)
+  return cubieShape
 }
 
 let cubieBody: THREE.MeshStandardMaterial | null = null
 function bodyMaterial(): THREE.MeshStandardMaterial {
-  cubieBody ??= new THREE.MeshStandardMaterial({ color: '#0B0C10', roughness: 0.6, metalness: 0.05 })
+  // Moulded, not painted: a satin black whose rounded edges pick up the lights.
+  cubieBody ??= new THREE.MeshStandardMaterial({ color: '#0E0F13', roughness: 0.42, metalness: 0, envMapIntensity: 0.9 })
   return cubieBody
 }
 
-// Fine light/dark streaks, multiplied over the Mirror Cube's blue, read as
-// brushed metal. Drawn once on a canvas and shared by every tile.
-// Every Mirror piece shares these three materials instead of making its own.
-let sharedMirror: { body: THREE.Material; tile: THREE.Material; dim: THREE.Material } | null = null
-function mirrorMaterials() {
-  if (!sharedMirror) {
-    const tile = (color: string) =>
-      new THREE.MeshStandardMaterial({ color, map: brushedTexture(), metalness: 0.9, roughness: 0.22, envMapIntensity: 1.25 })
-    sharedMirror = {
-      body: new THREE.MeshStandardMaterial({ color: PLASTIC, roughness: 0.85 }),
-      tile: tile('#8FB4FF'),
-      dim: tile('#5A78C4'),
-    }
-  }
-  return sharedMirror
-}
+// The Mirror Cube is brushed aluminium on a black core. Each piece gets its own
+// tile material (shared by its three tiles) so it can fade out of focus alone.
+const MIRROR_SILVER = new THREE.Color('#CFD3DA')
+let mirrorCore: THREE.MeshStandardMaterial | null = null
+const mirrorBody = () => (mirrorCore ??= new THREE.MeshStandardMaterial({ color: '#0E0F13', roughness: 0.6 }))
+const newMirrorTile = () =>
+  new THREE.MeshStandardMaterial({ color: MIRROR_SILVER, map: brushedTexture(), metalness: 1, roughness: 0.32, envMapIntensity: 1.15 })
 
 let brushed: THREE.CanvasTexture | null = null
+// Fine light and dark streaks, all running one way: brushed metal. Mipmapped and
+// filtered at an angle, so the streaks melt into a sheen at a distance instead
+// of shimmering into stripes.
 function brushedTexture(): THREE.CanvasTexture {
   if (brushed) return brushed
   const c = document.createElement('canvas')
   c.width = c.height = 256
   const g = c.getContext('2d')!
-  g.fillStyle = '#d8d8d8'
-  g.fillRect(0, 0, 256, 256)
   for (let y = 0; y < 256; y++) {
-    const v = 222 + Math.floor(Math.random() * 33)
+    const v = 214 + Math.floor(Math.random() * 30)
     g.fillStyle = `rgb(${v},${v},${v})`
     g.fillRect(0, y, 256, 1)
   }
   brushed = new THREE.CanvasTexture(c)
   brushed.colorSpace = THREE.SRGBColorSpace
+  brushed.anisotropy = 8
   return brushed
-}
-
-// Standard ease-in-out: starts and ends the turn gently instead of snapping
-// to/from a constant speed, which read as mechanical/jerky.
-function easeInOutQuad(t: number): number {
-  return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
 }
 
 interface DragStart {
   normal: [number, number, number]
-  slot: [number, number, number]
+  slot: Slot
   x: number
   y: number
 }
@@ -157,6 +155,13 @@ function axisScreenDirs(camera: THREE.Camera): Record<Axis, [number, number]> {
   }
 }
 
+// Once a drag reads as a turn, the layer gives a little, the way a real one
+// yields under your thumb before it goes: up to this angle, growing with the
+// drag. It shows which layer and which way before you let go. Released, it is
+// either carried on by the turn itself or springs back.
+const GIVE_MAX = 0.1 // radians, under 6 degrees
+const GIVE_HOLD_MS = 160 // how long a released give waits for its turn to start
+
 interface PiecesProps {
   plugin: PuzzlePlugin
   mesh: PuzzleMesh
@@ -166,6 +171,7 @@ interface PiecesProps {
   setOrbitEnabled: (enabled: boolean) => void
   gestureFeed?: GestureFeed | null
   previewLayer?: { axis: Axis; layer: number } | null
+  focusSlots?: Slot[] | null
   colorblindPalette?: boolean
   colorRemap?: Record<string, string>
   turnMs?: number
@@ -193,6 +199,7 @@ function Pieces({
   setOrbitEnabled,
   gestureFeed,
   previewLayer,
+  focusSlots,
   colorblindPalette,
   colorRemap,
   turnMs = MOVE_DURATION_MS,
@@ -247,7 +254,8 @@ function Pieces({
   }, [plugin, colorState, colorblindPalette, colorRemap])
 
   const pieceGroupRefs = useRef(new Map<string, THREE.Group>())
-  const activeAnim = useRef<{ axis: Axis; layer: -1 | 0 | 1; angle: number; startedAt: number } | null>(null)
+  const activeAnim = useRef<{ axis: Axis; layer: -1 | 0 | 1; angle: number; from: number; startedAt: number; landed: boolean } | null>(null)
+  const give = useRef<{ axis: Axis; layer: number; angle: number; target: number; releasedAt: number | null } | null>(null)
 
   // Where each piece is drawn and how it is turned. A 3x3 never moves its
   // meshes -- it repaints stickers -- so every piece stays at its own slot,
@@ -255,7 +263,7 @@ function Pieces({
   // so each one is drawn at the slot and rotation its piece tracker reports.
   const isMirror = plugin.id === 'mirror'
   const poses = useMemo(() => {
-    const out = new Map<string, { slot: [number, number, number]; base: THREE.Quaternion }>()
+    const out = new Map<string, { slot: Slot; base: THREE.Quaternion }>()
     if (!isMirror) {
       for (const p of mesh.pieces) out.set(p.pieceId, { slot: p.slot, base: IDENTITY_QUATERNION })
       return out
@@ -272,6 +280,92 @@ function Pieces({
   }, [isMirror, mesh, colorState])
   const posesRef = useRef(poses)
   posesRef.current = poses
+
+  // ---- Colour and focus. Every sticker (every Mirror piece's tiles) has its
+  // own material, painted here rather than through React so a fade costs no
+  // re-render: its colour is the face's colour, sunk toward the plastic by how
+  // far out of focus the piece currently is.
+  const materials = useRef(new Map<string, THREE.MeshStandardMaterial>())
+  const baseColor = useRef(new Map<string, THREE.Color>())
+  const dimNow = useRef(new Map<string, number>())
+  const materialFor = (key: string) => {
+    let m = materials.current.get(key)
+    if (!m) {
+      m = isMirror ? newMirrorTile() : newStickerMaterial()
+      materials.current.set(key, m)
+    }
+    return m
+  }
+  useEffect(() => {
+    const all = materials.current
+    return () => {
+      for (const m of all.values()) m.dispose()
+      all.clear()
+    }
+  }, [])
+
+  const paint = (pieceId: string) => {
+    const amount = dimNow.current.get(pieceId) ?? 0
+    const keys = isMirror ? [pieceId] : faceKeys.map((face) => `${pieceId}:${face}`)
+    for (const key of keys) {
+      const m = materials.current.get(key)
+      const base = isMirror ? MIRROR_SILVER : baseColor.current.get(key)
+      if (m && base) m.color.copy(base).lerp(DIM_TOWARD, amount * DIM_STRENGTH)
+    }
+  }
+
+  const focusSet = useMemo(() => (focusSlots ? new Set(focusSlots.map((s) => s.join(','))) : null), [focusSlots])
+  const dimTargetRef = useRef<(slot: Slot) => number>(() => 0)
+  dimTargetRef.current = (slot) => {
+    const byPreview = !activeAnim.current && previewLayer != null && slot[AXIS_INDEX[previewLayer.axis]] !== previewLayer.layer
+    const byFocus = focusSet !== null && !focusSet.has(slot.join(','))
+    return byPreview || byFocus ? 1 : 0
+  }
+
+  // New colours (a turn landed, a palette changed): repaint before the frame is drawn.
+  useLayoutEffect(() => {
+    const target = dimTargetRef.current
+    for (const piece of mesh.pieces) {
+      if (!isMirror) {
+        const faceColors = colors.get(piece.pieceId) ?? {}
+        for (const face of faceKeys) {
+          const hex = faceColors[face]
+          if (!hex) continue
+          const key = `${piece.pieceId}:${face}`
+          const c = baseColor.current.get(key) ?? new THREE.Color()
+          baseColor.current.set(key, c.set(hex))
+        }
+      }
+      // A piece seen for the first time starts where it should be, not fading into it.
+      if (!dimNow.current.has(piece.pieceId)) dimNow.current.set(piece.pieceId, target(posesRef.current.get(piece.pieceId)?.slot ?? piece.slot))
+      paint(piece.pieceId)
+    }
+    invalidate()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [colors, mesh, isMirror, faceKeys, invalidate])
+
+  // Focus changed: let the frame loop fade toward it.
+  useEffect(() => {
+    invalidate()
+  }, [previewLayer, focusSet, poses, invalidate])
+
+  // Moves every piece's dim one frame's worth toward where it should be;
+  // true while any is still on its way.
+  const fadeDims = (dtMs: number) => {
+    let moving = false
+    const step = prefersReducedMotion() ? 1 : dtMs / DIM_FADE_MS
+    for (const piece of mesh.pieces) {
+      const slot = posesRef.current.get(piece.pieceId)?.slot ?? piece.slot
+      const target = dimTargetRef.current(slot)
+      const now = dimNow.current.get(piece.pieceId) ?? target
+      if (now === target) continue
+      const next = now < target ? Math.min(target, now + step) : Math.max(target, now - step)
+      dimNow.current.set(piece.pieceId, next)
+      paint(piece.pieceId)
+      if (next !== target) moving = true
+    }
+    return moving
+  }
 
   // A NEW animatingMove means a move just landed in the store. Figure out
   // whether it is one this renderer knows how to visually turn (cube3 and
@@ -298,6 +392,7 @@ function Pieces({
           const pose = posesRef.current.get(pieceId)
           if (pose) group.quaternion.copy(pose.base)
         }
+        invalidate()
       }
       return
     }
@@ -309,40 +404,72 @@ function Pieces({
       onAnimationCompleteRef.current?.()
       return
     }
-    activeAnim.current = { ...parsed, startedAt: performance.now() }
+    // A layer already given a little by the drag that made this turn carries
+    // on from there, instead of jumping back to the start.
+    const g = give.current
+    const from = g && g.axis === parsed.axis && g.layer === parsed.layer && g.angle * parsed.angle > 0 ? g.angle : 0
+    give.current = null
+    activeAnim.current = { ...parsed, from, startedAt: performance.now(), landed: false }
     invalidate()
   }, [animatingMove, invalidate])
 
-  useFrame(() => {
-    const anim = activeAnim.current
-    if (!anim) return
-    // The canvas only draws when asked; a turn in progress asks every frame.
-    invalidate()
-    const t = Math.min(1, (performance.now() - anim.startedAt) / turnMsRef.current)
-    const angle = anim.angle * easeInOutQuad(t)
-    const axisVector = AXIS_VECTOR[anim.axis]
-    const axisIdx = AXIS_INDEX[anim.axis]
-    const turn = new THREE.Quaternion().setFromAxisAngle(axisVector, angle)
+  const turnLayer = (axis: Axis, layer: number, angle: number) => {
+    const turn = new THREE.Quaternion().setFromAxisAngle(AXIS_VECTOR[axis], angle)
+    const axisIdx = AXIS_INDEX[axis]
     for (const [pieceId, group] of pieceGroupRefs.current) {
       const pose = posesRef.current.get(pieceId)
       if (!pose) continue
-      if (pose.slot[axisIdx] === anim.layer) group.quaternion.copy(turn).multiply(pose.base)
+      if (pose.slot[axisIdx] === layer) group.quaternion.copy(turn).multiply(pose.base)
       else if (!group.quaternion.equals(pose.base)) group.quaternion.copy(pose.base)
     }
-    if (t >= 1) {
-      activeAnim.current = null
-      // A 3x3 repaints its stickers, so its pieces return to their slots. A
-      // Mirror Cube's pieces stay where the turn left them: snapping back to
-      // the old pose here showed one frame of the pre-turn cube, a visible
-      // jerk at the end of every move, until the new poses rendered.
-      if (!isMirror)
-        for (const [pieceId, group] of pieceGroupRefs.current) {
-          const pose = posesRef.current.get(pieceId)
-          if (pose) group.quaternion.copy(pose.base)
-        }
-      setColorState(stateRef.current)
-      onAnimationCompleteRef.current?.()
+  }
+
+  useFrame((_, delta) => {
+    const now = performance.now()
+    // After a rest the clock's first step is long; a fade or a give should not jump.
+    const dtMs = Math.min(delta * 1000, 50)
+    let more = false
+    const anim = activeAnim.current
+    if (anim) {
+      // The canvas only draws when asked; a turn in progress asks every frame.
+      more = true
+      const t = Math.min(1, (now - anim.startedAt) / turnMsRef.current)
+      // A spring with a real cube's detent: the layer runs a hair past the
+      // quarter and settles back. Asked for less motion, it simply arrives.
+      const eased = (prefersReducedMotion() ? softEase : turnEase)(t)
+      // The click is felt the moment the layer first reaches its place.
+      if (!anim.landed && eased >= 1) {
+        anim.landed = true
+        turnLanded(now)
+      }
+      turnLayer(anim.axis, anim.layer, anim.from + (anim.angle - anim.from) * eased)
+      if (t >= 1) {
+        activeAnim.current = null
+        // A 3x3 repaints its stickers, so its pieces return to their slots. A
+        // Mirror Cube's pieces stay where the turn left them: snapping back to
+        // the old pose here showed one frame of the pre-turn cube, a visible
+        // jerk at the end of every move, until the new poses rendered.
+        if (!isMirror)
+          for (const [pieceId, group] of pieceGroupRefs.current) {
+            const pose = posesRef.current.get(pieceId)
+            if (pose) group.quaternion.copy(pose.base)
+          }
+        setColorState(stateRef.current)
+        onAnimationCompleteRef.current?.()
+      }
+    } else if (give.current) {
+      const g = give.current
+      if (g.releasedAt !== null && now - g.releasedAt > GIVE_HOLD_MS) g.target = 0
+      g.angle += (g.target - g.angle) * (1 - Math.exp(-dtMs / 45))
+      if (Math.abs(g.target - g.angle) < 1e-4) g.angle = g.target
+      if (g.angle === 0 && g.target === 0) {
+        give.current = null
+        turnLayer(g.axis, g.layer, 0)
+      } else turnLayer(g.axis, g.layer, g.angle)
+      more = g.angle !== g.target || g.releasedAt !== null
     }
+    if (fadeDims(dtMs)) more = true
+    if (more) invalidate()
   })
 
   const drag = useRef<DragStart | null>(null)
@@ -355,32 +482,53 @@ function Pieces({
   // ends off the piece it started on (or off the canvas entirely), and an r3f
   // pointerup only fires while the pointer is still over an object.
   useEffect(() => {
+    const dragInput = (start: DragStart, e: PointerEvent): DragInput => ({
+      hitNormal: start.normal,
+      slot: start.slot,
+      dragScreen: [e.clientX - start.x, e.clientY - start.y],
+      axisScreenDirs: axisScreenDirs(camera),
+    })
     const finish = (e: PointerEvent) => {
       const start = drag.current
       drag.current = null
       setOrbitEnabled(true)
-      if (!start) return
-      const input: DragInput = {
-        hitNormal: start.normal,
-        slot: start.slot,
-        dragScreen: [e.clientX - start.x, e.clientY - start.y],
-        axisScreenDirs: axisScreenDirs(camera),
+      if (give.current) {
+        give.current.releasedAt = performance.now()
+        invalidate()
       }
-      onMove(moveFromDrag(input))
+      if (!start) return
+      onMove(moveFromDrag(dragInput(start, e)))
     }
+    // Feedback only: what the drag would turn if let go now. The turn itself is
+    // still decided once, on release, exactly as before.
+    const follow = (e: PointerEvent) => {
+      const start = drag.current
+      if (!start || activeAnim.current) return
+      const input = dragInput(start, e)
+      const move = moveFromDrag(input)
+      const parsed = move ? parseCubeMove(move.alg.toString()) : null
+      if (!parsed) {
+        if (give.current) give.current.target = 0
+      } else {
+        const past = Math.hypot(...input.dragScreen) - 8
+        const target = Math.sign(parsed.angle) * GIVE_MAX * (1 - Math.exp(-past / 70))
+        const g = give.current
+        if (g && g.axis === parsed.axis && g.layer === parsed.layer) g.target = target
+        else give.current = { axis: parsed.axis, layer: parsed.layer, angle: 0, target, releasedAt: null }
+      }
+      invalidate()
+    }
+    window.addEventListener('pointermove', follow)
     window.addEventListener('pointerup', finish)
     window.addEventListener('pointercancel', finish)
     return () => {
+      window.removeEventListener('pointermove', follow)
       window.removeEventListener('pointerup', finish)
       window.removeEventListener('pointercancel', finish)
     }
-  }, [camera, onMove, setOrbitEnabled])
+  }, [camera, onMove, setOrbitEnabled, invalidate])
 
-  const handleDown = (
-    e: ThreeEvent<PointerEvent>,
-    slot: [number, number, number],
-    base: THREE.Quaternion = IDENTITY_QUATERNION,
-  ) => {
+  const handleDown = (e: ThreeEvent<PointerEvent>, slot: Slot, base: THREE.Quaternion = IDENTITY_QUATERNION) => {
     if (!interactive) return
     // Only the left/primary button turns a layer; right-button drags are left
     // alone so OrbitControls (mouseButtons.RIGHT = ROTATE below) can always
@@ -416,19 +564,20 @@ function Pieces({
     })
   }, [gestureFeed, interactive])
 
+  const register = (pieceId: string) => (el: THREE.Group | null) => {
+    if (el) pieceGroupRefs.current.set(pieceId, el)
+    else pieceGroupRefs.current.delete(pieceId)
+  }
+
   return (
     <group>
       {mesh.pieces.map((piece) => {
         const pose = poses.get(piece.pieceId)
         if (!pose) return null
         if (isMirror) {
-          const isDimmed =
-            !activeAnim.current &&
-            previewLayer != null &&
-            pose.slot[AXIS_INDEX[previewLayer.axis]] !== previewLayer.layer
           const box = pieceBox(piece.slot)
           const [sx, sy, sz] = box.size
-          // A black plastic body with a brushed-blue tile on every side: each
+          // A black plastic body with a brushed-metal tile on every side: each
           // tile is a slab inset across its own face but standing proud along
           // its axis, so a dark rim frames every tile like a real Mirror Cube.
           const tiles: [number, number, number][] = [
@@ -436,21 +585,15 @@ function Pieces({
             [sx - 0.16, sy - 0.03, sz - 0.16],
             [sx - 0.16, sy - 0.16, sz - 0.03],
           ]
+          const tile = materialFor(piece.pieceId)
           return (
-            <group
-              key={piece.pieceId}
-              quaternion={pose.base}
-              ref={(el) => {
-                if (el) pieceGroupRefs.current.set(piece.pieceId, el)
-                else pieceGroupRefs.current.delete(piece.pieceId)
-              }}
-            >
+            <group key={piece.pieceId} quaternion={pose.base} ref={register(piece.pieceId)}>
               <group position={box.center} onPointerDown={(e) => handleDown(e, pose.slot, pose.base)}>
-                <mesh material={mirrorMaterials().body}>
+                <mesh material={mirrorBody()}>
                   <boxGeometry args={[sx - 0.1, sy - 0.1, sz - 0.1]} />
                 </mesh>
                 {tiles.map((t, i) => (
-                  <mesh key={i} material={isDimmed ? mirrorMaterials().dim : mirrorMaterials().tile}>
+                  <mesh key={i} material={tile}>
                     <boxGeometry args={t} />
                   </mesh>
                 ))}
@@ -459,46 +602,33 @@ function Pieces({
           )
         }
         const faceColors = colors.get(piece.pieceId) ?? {}
-        // A selected layer keeps its exact colours and everything else dims,
-        // rather than the layer glowing: any glow (coloured or white) shifted
-        // the stickers' hue -- green read cyan, red read pink -- right when
-        // the user needs to read true colours to choose their next move.
-        const isDimmed =
-          !activeAnim.current &&
-          previewLayer != null &&
-          piece.slot[AXIS_INDEX[previewLayer.axis]] !== previewLayer.layer
         // A solved face is one uniform colour with no gap between cubies, so
         // it renders as a single solid block and the puzzle reads as static
         // plastic rather than a twisty puzzle. Nudging each piece slightly
         // outward along its own slot direction (proportional to the puzzle's
         // own scale, not a fixed constant) reveals real seams between pieces
         // without needing any puzzle-specific axis knowledge.
-        const gapOffset = piece.slot.map((v) => v * GAP_FRACTION) as [number, number, number]
+        const gapOffset = piece.slot.map((v) => v * GAP_FRACTION) as Slot
         return (
-          <group
-            key={piece.pieceId}
-            position={gapOffset}
-            ref={(el) => {
-              if (el) pieceGroupRefs.current.set(piece.pieceId, el)
-              else pieceGroupRefs.current.delete(piece.pieceId)
-            }}
-          >
-            {/* The dark plastic body takes the pointer; the stickers are paint on top of it. */}
+          <group key={piece.pieceId} position={gapOffset} ref={register(piece.pieceId)}>
+            {/* The pointer hits the plugin's square box, exactly as it always has
+                (its flat faces give the drag its face normal); what is drawn is
+                the rounded cubie. */}
             <mesh
               geometry={piece.geometry}
-              material={bodyMaterial()}
+              visible={false}
               userData={{ slot: piece.slot }}
               onPointerDown={(e) => handleDown(e, piece.slot)}
             />
+            <mesh geometry={cubieGeometry()} material={bodyMaterial()} position={piece.slot} raycast={NO_RAYCAST} />
             {faceKeys.map((face) => {
-              const hex = faceColors[face]
               const placement = STICKER_PLACEMENT[face]
-              if (!hex || !placement) return null
+              if (!faceColors[face] || !placement) return null
               return (
                 <mesh
                   key={face}
                   geometry={stickerGeometry()}
-                  material={stickerMaterial(isDimmed ? dim(hex) : hex)}
+                  material={materialFor(`${piece.pieceId}:${face}`)}
                   position={[
                     piece.slot[0] + placement.normal[0] * STICKER_LIFT,
                     piece.slot[1] + placement.normal[1] * STICKER_LIFT,
@@ -539,8 +669,12 @@ export interface PuzzleCanvasProps {
   // gestures. Layer turns are unaffected -- the point is to hold the cube
   // still while solving.
   cameraLocked?: boolean
-  // Glows every piece of the layer a hand sign has selected, before it turns.
+  // The layer a hand sign has selected, before it turns: everything else dims.
   previewLayer?: { axis: Axis; layer: number } | null
+  // The pieces a lesson is about, by slot ([x, y, z] in -1..1; x right, y up,
+  // z front): every other piece dims, fading in and out. Combines with
+  // previewLayer (a piece either one dims is dimmed). Memoise the array.
+  focusSlots?: Slot[] | null
   // Notation of the next guided-solve step: draws a curved arrow around that
   // layer, sweeping the way it should turn. Hidden while a move animates.
   guideMove?: string | null
@@ -560,10 +694,12 @@ function PuzzleCanvasInner({
   onAnimationComplete,
   cameraLocked = false,
   previewLayer = null,
+  focusSlots = null,
   guideMove = null,
   onContextRestored,
 }: PuzzleCanvasProps & { onContextRestored?: () => void }) {
   const mesh = useMemo(() => plugin.buildGeometry(), [plugin])
+  const isMirror = plugin.id === 'mirror'
   // The camera is framed for cube3's ~2.6-unit half-diagonal. Pyraminx and
   // Megaminx use a unit-radius base solid, so without this they rendered at
   // barely a third of cube3's on-screen size -- confirmed by screenshot, not
@@ -659,13 +795,15 @@ function PuzzleCanvasInner({
       >
         <FitToScreen />
         {/* No background colour: the canvas is see-through, and the stage behind
-            it (a soft glow and a shadow on the floor) is plain CSS. */}
-        {/* Stickers are paint and want even light; the Mirror Cube is metal and
-            wants little of it, so its reflections do the work. */}
-        <ambientLight intensity={plugin.id === 'mirror' ? 0.75 : 1.9} />
-        <directionalLight position={[6, 8, 5]} intensity={plugin.id === 'mirror' ? 2.2 : 1.5} />
-        <directionalLight position={[-6, -4, -5]} intensity={plugin.id === 'mirror' ? 0.7 : 0.5} />
-        {plugin.id === 'mirror' && <StudioEnvironment />}
+            it (a soft glow) is plain CSS. */}
+        {/* A soft studio: a big diffuse key from above and in front, a little
+            fill from the side, and the studio's softboxes reflected in the
+            stickers' gloss and the plastic's edges. Metal takes almost all its
+            look from the reflections, so the Mirror Cube gets less direct light. */}
+        <hemisphereLight args={['#FFFFFF', '#3A3D46', isMirror ? 0.5 : 1.25]} />
+        <directionalLight position={[4, 9, 6]} intensity={isMirror ? 1.6 : 1.35} />
+        <directionalLight position={[-7, 2, -3]} intensity={isMirror ? 0.5 : 0.4} />
+        <StudioEnvironment />
         <group scale={scale}>
           <Pieces
             plugin={plugin}
@@ -676,6 +814,7 @@ function PuzzleCanvasInner({
             setOrbitEnabled={setOrbitEnabled}
             gestureFeed={gestureFeed}
             previewLayer={previewLayer}
+            focusSlots={focusSlots}
             colorblindPalette={colorblindPalette}
             colorRemap={colorRemap}
             turnMs={turnMs}
@@ -684,7 +823,8 @@ function PuzzleCanvasInner({
             onGestureOrbit={nudgeOrbit}
             onGestureZoom={nudgeZoom}
           />
-          {guideMove && !animatingMove && <MoveArrow notation={guideMove} />}
+          <ContactShadow mirror={isMirror} />
+          {guideMove && !animatingMove && <MoveArrow notation={guideMove} reach={isMirror ? 2.05 : 1.7} />}
         </group>
         <OrbitControls
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -705,17 +845,48 @@ function PuzzleCanvasInner({
 }
 
 // The camera is framed by height, with a little room left round the cube for
-// the guide's arrow, which reaches past it. On a canvas narrower than it is
-// tall the cube would crowd the sides (and the arrow be cut off), so zoom out
-// in proportion to how narrow the canvas is.
+// the guide's arrow. On a canvas narrower than it is tall the cube would crowd
+// the sides, so zoom out in proportion to how narrow the canvas is.
 function FitToScreen() {
   const { camera, size } = useThree()
   useEffect(() => {
     const cam = camera as THREE.PerspectiveCamera
-    Object.assign(cam, { zoom: Math.min(0.94, Math.max(0.55, (size.width / size.height) * 0.88)) })
+    Object.assign(cam, { zoom: Math.min(0.94, Math.max(0.42, (size.width / size.height) * 0.86)) })
     cam.updateProjectionMatrix()
   }, [camera, size])
   return null
+}
+
+// Where the cube's shadow falls on the table below it: a dark core right under
+// it and a soft penumbra, painted once into a small texture. It is part of the
+// scene, so it stays under the cube when the view turns and is hidden from below.
+let shadowTexture: THREE.CanvasTexture | null = null
+function shadowMap(): THREE.CanvasTexture {
+  if (!shadowTexture) {
+    const c = document.createElement('canvas')
+    c.width = c.height = 128
+    const g = c.getContext('2d')!
+    const r = g.createRadialGradient(64, 64, 0, 64, 64, 64)
+    r.addColorStop(0, 'rgba(0,0,0,0.62)')
+    r.addColorStop(0.35, 'rgba(0,0,0,0.42)')
+    r.addColorStop(0.7, 'rgba(0,0,0,0.12)')
+    r.addColorStop(1, 'rgba(0,0,0,0)')
+    g.fillStyle = r
+    g.fillRect(0, 0, 128, 128)
+    shadowTexture = new THREE.CanvasTexture(c)
+  }
+  return shadowTexture
+}
+function ContactShadow({ mirror }: { mirror: boolean }) {
+  // Low enough that a corner swinging down mid-turn never dips into it. The
+  // Mirror Cube's block sits off-centre, a little to the right and front.
+  const at: Slot = mirror ? [0.2, -2.25, 0.1] : [0, -2.25, 0]
+  return (
+    <mesh position={at} rotation={[-Math.PI / 2, 0, 0]} raycast={NO_RAYCAST} renderOrder={-1}>
+      <planeGeometry args={[5.2, 5.2]} />
+      <meshBasicMaterial map={shadowMap()} transparent depthWrite={false} />
+    </mesh>
+  )
 }
 
 let webgl: boolean | null = null
@@ -751,7 +922,7 @@ function NoWebGL({ className, animatingMove, onAnimationComplete }: PuzzleCanvas
     <div className={`${className ?? ''} grid place-items-center p-8 text-center`} data-testid="no-webgl">
       <div className="max-w-sm">
         <p className="font-display text-2xl font-bold">3D graphics are not available</p>
-        <p className="mt-3 text-[#9C9AA3]">
+        <p className="mt-3 text-fg-faint">
           Your browser could not start WebGL, which draws the cube. Turn on hardware acceleration in your browser settings, or
           try a recent version of Chrome, Edge, Firefox or Safari.
         </p>
@@ -760,10 +931,11 @@ function NoWebGL({ className, animatingMove, onAnimationComplete }: PuzzleCanvas
   )
 }
 
-// Polished metal is only silver when it has something to reflect. This paints a
-// tiny studio -- a light-to-dark backdrop with a few bright panels -- onto a
-// canvas and bakes it into an environment map once. (drei's <Environment> with
-// light panels did the same job but blocked the page for seconds.)
+// What the gloss and the metal reflect: a tiny studio -- a dark room, a large
+// softbox overhead and in front, a strip light to one side, a dim warm bounce
+// from the table -- painted onto a canvas and baked into an environment map
+// once. (drei's <Environment> with light panels did the same job but blocked
+// the page for seconds.)
 function StudioEnvironment() {
   const { gl, scene, invalidate } = useThree()
   useEffect(() => {
@@ -771,21 +943,26 @@ function StudioEnvironment() {
     canvas.width = 256
     canvas.height = 128
     const g = canvas.getContext('2d')!
-    const backdrop = g.createLinearGradient(0, 0, 0, 128)
-    backdrop.addColorStop(0, '#ffffff')
-    backdrop.addColorStop(0.38, '#aab6d6')
-    backdrop.addColorStop(0.55, '#2c3350')
-    backdrop.addColorStop(1, '#05060a')
-    g.fillStyle = backdrop
+    const room = g.createLinearGradient(0, 0, 0, 128)
+    room.addColorStop(0, '#3a3f4c')
+    room.addColorStop(0.45, '#20232b')
+    room.addColorStop(0.55, '#14161b')
+    room.addColorStop(1, '#0a0b0e')
+    g.fillStyle = room
     g.fillRect(0, 0, 256, 128)
-    g.fillStyle = '#ffffff'
-    g.fillRect(10, 8, 90, 34)
-    g.fillRect(140, 6, 100, 30)
-    g.fillStyle = '#e8eeff'
-    g.fillRect(96, 50, 64, 14)
-    // A dark band low on one side gives every block a shaded flank.
-    g.fillStyle = '#04050a'
-    g.fillRect(170, 70, 86, 40)
+    // The key softbox: soft-edged, overhead and toward the viewer.
+    const key = g.createRadialGradient(160, 22, 4, 160, 22, 46)
+    key.addColorStop(0, '#ffffff')
+    key.addColorStop(0.55, '#f2f4f8')
+    key.addColorStop(1, 'rgba(242,244,248,0)')
+    g.fillStyle = key
+    g.fillRect(100, 0, 120, 70)
+    // A tall strip light on one side, for a crisp edge highlight.
+    g.fillStyle = '#d8deea'
+    g.fillRect(34, 26, 14, 46)
+    // The table's warm bounce.
+    g.fillStyle = 'rgba(120,96,70,0.35)'
+    g.fillRect(0, 96, 256, 32)
     const source = new THREE.CanvasTexture(canvas)
     source.mapping = THREE.EquirectangularReflectionMapping
     source.colorSpace = THREE.SRGBColorSpace

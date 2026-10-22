@@ -1,56 +1,49 @@
-import { NavLink } from 'react-router-dom'
+import type { CSSProperties } from 'react'
+import { Link, useLocation } from 'react-router-dom'
 import { Logo } from './Logo'
+import { SiteMenu } from './shell/SiteMenu'
+import { PLACES, placeOf } from './shell/places'
 
-const GITHUB = 'https://github.com/JayGuri/cubepalm'
-
-// One tile per colour of the cube. Each is a way into the app, so the palette
-// the whole site is built on is also the menu.
-const TILES = [
-  { label: 'Learn', to: '/learn', colour: '#FF8A00' },
-  { label: '3×3', to: '/play/cube3', colour: '#2FB36B' },
-  { label: 'Mirror', to: '/play/mirror', colour: '#5B8DEF' },
-  { label: 'Settings', to: '/settings', colour: '#F4F5F8' },
-  { label: 'Maths', to: '/how', colour: '#F0566B' },
-  { label: 'Source', to: GITHUB, colour: '#FFD500' },
-] as const
-
-// Phones get 44 px tiles (three to a row under 400 px, so "Settings" fits);
-// from 640 px they shrink to pills, unless the screen is a touch screen.
-const TILE =
-  'grid min-h-11 place-items-center rounded-xl px-1 text-center text-[0.8rem] font-bold leading-none text-[#10131A] shadow-[inset_0_-3px_0_rgba(0,0,0,0.18)] transition duration-200 hover:-translate-y-1 hover:shadow-[inset_0_-3px_0_rgba(0,0,0,0.18),0_10px_20px_-8px_var(--tile)] focus-visible:-translate-y-1 min-[400px]:text-[0.74rem] sm:min-h-10 sm:min-w-[4.6rem] sm:rounded-2xl sm:px-3.5 sm:text-sm pointer-coarse:min-h-11'
+// The header of every content page. The six places are the cube's six faces,
+// drawn as stickers on a strip of black plastic: the face you are on is lit,
+// the others sit in shadow until you reach for one. On a phone there is no room
+// for six, so it is the logo and the menu, which opens the whole cube.
 
 export function SiteNav({ size = 44 }: { size?: number }) {
+  const here = placeOf(useLocation().pathname)
   return (
-    <nav aria-label="Main" className="flex flex-wrap items-center justify-between gap-x-6 gap-y-4">
+    <nav aria-label="Main" className="flex items-center justify-between gap-4">
       <Logo size={size} />
-      <ul className="grid w-full grid-cols-3 gap-1.5 min-[400px]:grid-cols-6 sm:flex sm:w-auto sm:gap-2">
-        {TILES.map((t) => {
-          const style = { background: t.colour, '--tile': t.colour } as React.CSSProperties
+      <ul className="face-row max-md:hidden">
+        {PLACES.map((p) => {
+          const style = { '--face': p.colour } as CSSProperties
           return (
-            <li key={t.label} className="contents">
-              {t.to.startsWith('http') ? (
-                <a href={t.to} target="_blank" rel="noreferrer" className={TILE} style={style}>
-                  {t.label}
+            <li key={p.label} className="contents">
+              {p.external ? (
+                <a href={p.to} target="_blank" rel="noreferrer" className="face-tab" style={style}>
+                  {p.label}
+                  <span className="sr-only"> (opens in a new tab)</span>
                 </a>
               ) : (
-                <NavLink to={t.to} className={({ isActive }) => `${TILE} ${isActive ? 'ring-2 ring-white/80 ring-offset-2 ring-offset-[#16171B]' : ''}`} style={style}>
-                  {t.label}
-                </NavLink>
+                <Link to={p.to} className="face-tab" style={style} aria-current={p === here ? 'page' : undefined}>
+                  {p.label}
+                </Link>
               )}
             </li>
           )
         })}
       </ul>
+      <SiteMenu className="md:hidden" />
     </nav>
   )
 }
 
-/** The six colours as a thin strip: a cube's edge, used to close a page. */
+/** The six colours as a strip of stickers: a cube's edge. */
 export function ColourStrip() {
   return (
-    <div aria-hidden className="grid grid-cols-6 gap-1.5">
-      {TILES.map((t) => (
-        <span key={t.label} className="h-2 rounded-full" style={{ background: t.colour }} />
+    <div aria-hidden className="grid grid-cols-6 gap-1 rounded-md bg-plastic p-1">
+      {PLACES.map((p) => (
+        <span key={p.label} className="sticker h-2 rounded-[3px]" style={{ background: p.colour }} />
       ))}
     </div>
   )

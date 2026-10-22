@@ -1,0 +1,312 @@
+/* How it works: the page's face colour is sticker-red (--color-sticker-red).
+   Surfaces and type follow the shared tokens in src/index.css; everything
+   below is this page's own small vocabulary. */
+
+.how-section {
+  margin-top: 4.5rem;
+}
+@media (min-width: 640px) {
+  .how-section {
+    margin-top: 6rem;
+  }
+}
+.how-h2::before {
+  content: '';
+  display: inline-block;
+  width: 0.55em;
+  height: 0.55em;
+  margin-right: 0.5em;
+  border-radius: 0.14em;
+  background: var(--color-sticker-red);
+  vertical-align: -0.05em;
+}
+
+.how-panel {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.05),
+    0 1px 0 rgb(0 0 0 / 0.35);
+}
+
+.how-note {
+  background: var(--color-plastic);
+  border-left: 3px solid var(--color-sticker-red);
+}
+
+.how-hero-number {
+  font-size: clamp(1.6rem, 6.8vw, 3.1rem);
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  font-variant-numeric: proportional-nums;
+  font-family: var(--font-display);
+  overflow-wrap: anywhere;
+}
+
+/* A toggled fact about the count: looks like the trigger-chip row, feels like MoveChip's states. */
+.how-factor {
+  background: var(--color-raised);
+  color: var(--color-fg-muted);
+  transition: background-color 200ms, color 200ms, box-shadow 200ms;
+}
+.how-factor[aria-pressed='true'] {
+  background: var(--color-sticker-red);
+  color: var(--color-plastic);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.28),
+    inset 0 -3px 0 rgb(0 0 0 / 0.18);
+}
+.how-factor:hover {
+  color: var(--color-fg);
+}
+
+/* The four-bit pose readout. */
+.how-bit {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.45rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: var(--color-ink);
+  color: var(--color-fg-faint);
+}
+.how-bit-1 {
+  background: var(--hand, var(--color-sticker-red));
+  color: var(--color-plastic);
+}
+.how-bit-0 {
+  color: var(--color-fg-muted);
+}
+.how-bit-q {
+  color: var(--color-fg-faint);
+  outline: 1.5px dashed rgb(255 255 255 / 0.25);
+  outline-offset: -1.5px;
+}
+
+/* A value on a track, judged against one or two marks (poseReaders thresholds). */
+.how-gauge {
+  position: relative;
+  display: block;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--color-ink);
+  overflow: hidden;
+}
+.how-gauge-fill {
+  position: absolute;
+  inset: 0;
+  width: 0;
+  background: var(--color-sticker-red);
+  border-radius: 999px;
+  transition: width 120ms linear;
+}
+.how-gauge-mark {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background: var(--color-fg);
+  opacity: 0.6;
+}
+
+.how-frame {
+  margin: 0;
+  border-radius: 0.75rem;
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  transition: outline-color 200ms;
+}
+.how-frame-on {
+  outline-color: var(--color-sticker-red);
+}
+.how-reach {
+  fill: none;
+  stroke: rgb(255 255 255 / 0.12);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 4;
+}
+
+/* Charts: one accent line (live, this page's red) and one quiet one (for comparison). */
+.how-grid {
+  stroke: var(--color-raised);
+  stroke-width: 1;
+}
+.how-tick {
+  fill: var(--color-fg-faint);
+  font-size: 10px;
+}
+.how-threshold {
+  stroke: var(--color-fg-faint);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+.how-now {
+  stroke: var(--color-fg);
+  stroke-width: 1;
+  opacity: 0.5;
+}
+.how-line-live {
+  stroke: var(--color-sticker-red);
+  stroke-width: 2;
+  fill: none;
+}
+.how-line-quiet {
+  stroke: var(--color-fg-faint);
+  stroke-width: 2;
+  fill: none;
+  opacity: 0.6;
+}
+.how-dot-live {
+  fill: var(--color-sticker-red);
+  stroke: var(--color-panel);
+  stroke-width: 2;
+}
+.how-label {
+  fill: var(--color-fg-faint);
+  font-size: 10px;
+}
+.how-lost {
+  fill: var(--color-fg-faint);
+  opacity: 0.18;
+}
+.how-col-on {
+  background: rgb(240 86 107 / 0.12);
+}
+
+/* The two chart bars in the trigger demo: out-of-slot (red) and in-slot-but-turned (a lighter step of the same hue). */
+.how-bar {
+  display: block;
+  background: var(--color-sticker-red);
+  border-radius: 0 0 3px 3px;
+}
+.how-bar-light {
+  display: block;
+  background: color-mix(in oklab, var(--color-sticker-red) 55%, var(--color-ink));
+}
+.how-swatch {
+  display: inline-block;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 3px;
+}
+.how-solved-tick {
+  display: block;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--color-sticker-green);
+}
+
+/* The live/measured key: a dot (worked out on this page, now) and a small square (quoted from docs/research). */
+.how-key {
+  display: inline-block;
+  width: 0.6rem;
+  height: 0.6rem;
+  flex: none;
+}
+.how-key-live {
+  border-radius: 999px;
+  background: var(--color-sticker-red);
+}
+.how-key-measured {
+  border-radius: 2px;
+  background: var(--color-fg-faint);
+}
+
+/* A preset sign button: sticker-sized, always a full touch target. */
+.how-preset {
+  display: grid;
+  place-items: center;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  padding: 0 0.6rem;
+  border-radius: 0.6rem;
+  background: var(--color-raised);
+  color: var(--color-fg);
+  font-weight: 700;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06);
+  transition: background-color 200ms, box-shadow 200ms, translate 200ms;
+}
+.how-preset:hover {
+  background: color-mix(in oklab, var(--color-raised) 80%, white 8%);
+}
+.how-preset:active {
+  translate: 0 1px;
+}
+
+/* A plain toggle button, used in place of a checkbox so every control keeps a
+   44px touch target without an oversized native checkbox. */
+.how-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 0.9rem;
+  border-radius: 0.6rem;
+  background: var(--color-raised);
+  color: var(--color-fg-muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06);
+  transition: background-color 200ms, color 200ms;
+}
+.how-toggle::before {
+  content: '';
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 0.25rem;
+  background: var(--color-ink);
+  box-shadow: inset 0 0 0 1.5px rgb(255 255 255 / 0.2);
+  flex: none;
+}
+.how-toggle[aria-pressed='true'] {
+  color: var(--color-fg);
+}
+.how-toggle[aria-pressed='true']::before {
+  background: var(--color-sticker-red);
+  box-shadow: none;
+}
+
+/* A slider's track and thumb, in the cube's own colour. The element's own
+   height is the full 44px touch target; the visible track is a thin bar
+   centred inside it via the track pseudo-elements. */
+.how-range {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 2.75rem;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.how-range::-webkit-slider-runnable-track {
+  height: 0.4rem;
+  border-radius: 999px;
+  background: var(--color-ink);
+}
+.how-range::-moz-range-track {
+  height: 0.4rem;
+  border-radius: 999px;
+  background: var(--color-ink);
+}
+.how-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 1.4rem;
+  height: 1.4rem;
+  margin-top: -0.5rem;
+  border-radius: 999px;
+  background: var(--color-sticker-red);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.3);
+  cursor: pointer;
+}
+.how-range::-moz-range-thumb {
+  width: 1.4rem;
+  height: 1.4rem;
+  border: none;
+  border-radius: 999px;
+  background: var(--color-sticker-red);
+  cursor: pointer;
+}
+
+.how-table summary::-webkit-details-marker {
+  display: none;
+}

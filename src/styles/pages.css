@@ -1,0 +1,223 @@
+/* Settings, Stats and the Recorder: the white face's controls.
+   Colours are the theme's (src/index.css); each var has its value as a fallback
+   because Tailwind only writes out the theme variables a utility uses. */
+
+@layer components {
+/* A button is a sticker (coloured: the action that matters) or a raised piece of
+     plastic. Pressed, it goes in and the lip under it shrinks; let go, it clicks back. */
+  .pg-btn {
+    display: inline-flex;
+    min-height: 2.75rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 0.5625rem; /* about a fifth of its height */
+    padding: 0.5rem 1.25rem;
+    font-weight: 700;
+    font-size: 0.9375rem;
+    line-height: 1.2;
+    text-align: center;
+    background-color: var(--color-raised, #202227);
+    color: var(--color-fg, #eceae4);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.07),
+      inset 0 -3px 0 rgb(0 0 0 / 0.32);
+    transition:
+      translate 220ms var(--ease-click, ease-out),
+      box-shadow 220ms var(--ease-click, ease-out),
+      background-color 160ms,
+      color 160ms;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  .pg-btn:hover {
+    background-color: #2a2c33;
+  }
+  .pg-btn:active {
+    translate: 0 2px;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.05),
+      inset 0 -1px 0 rgb(0 0 0 / 0.32);
+    transition-duration: 60ms;
+  }
+  .pg-btn-go {
+    background-color: var(--color-sticker-yellow, #ffd500);
+    color: var(--color-plastic, #0e0f13);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.28),
+      inset 0 -3px 0 rgb(0 0 0 / 0.18);
+  }
+  .pg-btn-go:hover {
+    background-color: #ffe04d;
+  }
+  .pg-btn-go:active {
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.2),
+      inset 0 -1px 0 rgb(0 0 0 / 0.18);
+  }
+  .pg-btn-danger:hover {
+    color: #ff8a9a;
+  }
+  
+  /* A switch: a sticker in a black plastic slot. Off, a grey sticker sits at the
+     left; on, a white one (the white face) clicks across to the right. */
+  .pg-switch {
+    display: inline-flex;
+    min-height: 2.75rem;
+    align-items: center;
+    gap: 0.75rem;
+    border-radius: 0.5rem;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  .pg-switch-slot {
+    position: relative;
+    width: 3.25rem;
+    height: 1.75rem;
+    flex: none;
+    border-radius: 0.4375rem;
+    background-color: var(--color-plastic, #0e0f13);
+    box-shadow:
+      inset 0 2px 3px rgb(0 0 0 / 0.55),
+      0 1px 0 rgb(255 255 255 / 0.06);
+  }
+  .pg-switch-knob {
+    position: absolute;
+    top: 0.25rem;
+    left: 0.25rem;
+    width: 1.25rem;
+    height: 1.25rem;
+    border-radius: 0.25rem;
+    background-color: #7a7c85;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.3),
+      inset 0 -2px 0 rgb(0 0 0 / 0.22);
+    transition:
+      translate 280ms var(--ease-click, ease-out),
+      scale 200ms var(--ease-click, ease-out),
+      background-color 180ms;
+  }
+  .pg-switch[aria-checked='true'] .pg-switch-knob {
+    translate: 1.5rem 0;
+    background-color: var(--color-sticker-white, #f4f5f8);
+  }
+  .pg-switch:hover .pg-switch-knob {
+    background-color: #8d8f98;
+  }
+  .pg-switch[aria-checked='true']:hover .pg-switch-knob {
+    background-color: #ffffff;
+  }
+  .pg-switch:active .pg-switch-knob {
+    scale: 0.86;
+    transition-duration: 280ms, 60ms, 180ms;
+  }
+  
+  /* A native select, dressed for a dark page: its open list stays dark too, and
+     16px text stops a phone zooming in when it is tapped. */
+  .pg-select {
+    appearance: none;
+    width: 100%;
+    min-height: 2.75rem;
+    border-radius: 0.5625rem;
+    border: 1px solid rgb(255 255 255 / 0.14);
+    padding: 0 2.25rem 0 0.875rem;
+    font-size: 1rem;
+    color: var(--color-fg, #eceae4);
+    color-scheme: dark;
+    background: var(--color-raised, #202227)
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%23b2b0b9' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+      no-repeat right 0.8rem center / 0.75rem;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05);
+    transition: border-color 160ms;
+    cursor: pointer;
+  }
+  .pg-select:hover {
+    border-color: rgb(255 255 255 / 0.4);
+  }
+  .pg-select option {
+    background-color: var(--color-raised, #202227);
+    color: var(--color-fg, #eceae4);
+  }
+  @media (min-width: 640px) and (pointer: fine) {
+    .pg-select {
+      font-size: 0.9375rem;
+    }
+  }
+  
+  /* Rows of one panel, parted by a moulded seam: a dark groove with the lamp's
+     highlight on its lower lip. */
+  .pg-seams > * + * {
+    border-top: 1px solid rgb(0 0 0 / 0.55);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.035);
+  }
+  
+  /* Settings is one instrument: its sections are layers of one block of plastic,
+     with the black between them showing, the way a cube's layers sit together. */
+  .pg-layers {
+    display: grid;
+    gap: 5px;
+    padding: 5px;
+    border-radius: 1.375rem;
+    background-color: var(--color-plastic, #0e0f13);
+  }
+  .pg-layers > * {
+    border-radius: 1.0625rem;
+    background-color: var(--color-panel, #1b1d22);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05);
+  }
+  
+  /* Stats: each bar clicks out to its length, one row after another. */
+  .pg-bar {
+    transform-box: fill-box;
+    transform-origin: left center;
+    animation: pg-bar-in 460ms var(--ease-click, ease-out) backwards;
+    animation-delay: var(--d, 0ms);
+  }
+  @keyframes pg-bar-in {
+    from {
+      transform: scaleX(0);
+    }
+  }
+  
+  /* The Recorder: a ring round the sticker for the shape being asked for. It slides
+     to the next one with a click. */
+  .pg-cursor {
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+    border: 2px solid var(--color-fg, #eceae4);
+    transition:
+      translate 300ms var(--ease-click, ease-out),
+      border-color 160ms;
+  }
+  .pg-cursor[data-live='true'] {
+    border-color: var(--color-sticker-red, #f0566b);
+  }
+  
+  @media (prefers-reduced-motion: reduce) {
+    /* The global rule shortens animations but not their delays: skip them outright. */
+    .pg-bar {
+      animation: none;
+    }
+  }
+
+  /* An answer on the Recorder's strip: chosen, a white sticker; not, bare plastic. */
+  .pg-choice-on {
+    background-color: var(--color-sticker-white, #f4f5f8);
+    color: var(--color-plastic, #0e0f13);
+  }
+  .pg-choice-on:hover {
+    background-color: #ffffff;
+  }
+  .pg-choice-off {
+    background-color: transparent;
+    color: var(--color-fg-muted, #b2b0b9);
+    font-weight: 400;
+    box-shadow: none;
+  }
+  .pg-choice-off:hover {
+    background-color: var(--color-raised, #202227);
+    color: var(--color-fg, #eceae4);
+  }
+}

@@ -85,3 +85,29 @@ test('Sign reading can be switched to Precise and is remembered', async ({ page 
   await page.reload()
   await expect(page.getByTestId('sign-reading')).toHaveValue('precise')
 })
+
+test('turn sound and vibrate on turns persist across reload, like the other switches', async ({ page }) => {
+  await page.goto('/settings')
+  await expect(page.getByTestId('turn-sound')).toHaveAttribute('aria-checked', 'false')
+  await page.getByTestId('turn-sound').click()
+  await expect(page.getByTestId('turn-sound')).toHaveAttribute('aria-checked', 'true')
+
+  // Vibrate is a switch only where the browser can vibrate; otherwise it says so instead.
+  const canVibrate = await page.evaluate(() => typeof navigator.vibrate === 'function')
+  if (canVibrate) {
+    await page.getByTestId('haptics-toggle').click()
+    await expect(page.getByTestId('haptics-toggle')).toHaveAttribute('aria-checked', 'true')
+  } else {
+    await expect(page.getByTestId('haptics-toggle')).toHaveCount(0)
+    await expect(page.getByText('Not on this device')).toBeVisible()
+  }
+
+  await page.reload()
+  await expect(page.getByTestId('turn-sound')).toHaveAttribute('aria-checked', 'true')
+  const stored = await page.evaluate(() => localStorage.getItem('cubepalm.settings.v1'))
+  expect(stored).toContain('"turnSound":true')
+  if (canVibrate) {
+    await expect(page.getByTestId('haptics-toggle')).toHaveAttribute('aria-checked', 'true')
+    expect(stored).toContain('"haptics":true')
+  }
+})

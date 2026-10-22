@@ -1,21 +1,46 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState, type ComponentType } from 'react'
 import { Link, Navigate, Route, BrowserRouter as Router, Routes, useLocation, useParams } from 'react-router-dom'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { Home } from './components/screens/Home'
 import { SiteNav } from './components/SiteNav'
+import { PageLoader, ScrambledFace } from './components/shell/Faces'
+import { PageTurns } from './components/shell/PageTurns'
+import { SiteFooter } from './components/shell/SiteFooter'
 import { lessonById } from './core/academy/lessons'
 import { isPuzzleAvailable } from './core/puzzles/registry'
 import { applyPageMeta, pageMeta } from './pageMeta'
 import type { SolverStatus } from './core/solvers/kociemba'
 
+// A screen whose code is fetched on demand. `preload` fetches it ahead of time;
+// once it is here the screen draws at once, without suspending, which is what
+// lets a page turn capture the real page rather than a loading screen.
+function lazyScreen<P extends object>(load: () => Promise<ComponentType<P>>) {
+  let loaded: ComponentType<P> | undefined
+  const preload = () => load().then((c) => (loaded = c))
+  const Lazy = lazy(() => preload().then((c) => ({ default: c })))
+  function Screen(props: P) {
+    // Chosen once per mount: switching type later would throw the screen's state away.
+    const [C] = useState(() => loaded ?? Lazy)
+    return <C {...props} />
+  }
+  return Object.assign(Screen, { preload })
+}
+
 // The play screen pulls in three.js, the puzzle engine and MediaPipe glue
 // (~1.5 MB); the home page needs none of it, so each screen loads on demand.
-const FreePlay = lazy(() => import('./components/screens/FreePlay').then((m) => ({ default: m.FreePlay })))
-const Academy = lazy(() => import('./components/screens/Academy').then((m) => ({ default: m.Academy })))
-const Stats = lazy(() => import('./components/screens/Stats').then((m) => ({ default: m.Stats })))
-const Recorder = lazy(() => import('./components/screens/Recorder').then((m) => ({ default: m.Recorder })))
-const Settings = lazy(() => import('./components/screens/Settings').then((m) => ({ default: m.Settings })))
-const How = lazy(() => import('./components/screens/How').then((m) => ({ default: m.How })))
+const FreePlay = lazyScreen<{ lessonId?: string }>(() => import('./components/screens/FreePlay').then((m) => m.FreePlay))
+const Academy = lazyScreen(() => import('./components/screens/Academy').then((m) => m.Academy))
+const Stats = lazyScreen(() => import('./components/screens/Stats').then((m) => m.Stats))
+const Recorder = lazyScreen(() => import('./components/screens/Recorder').then((m) => m.Recorder))
+const Settings = lazyScreen(() => import('./components/screens/Settings').then((m) => m.Settings))
+const How = lazyScreen(() => import('./components/screens/How').then((m) => m.How))
+
+/** The code a path's page needs, fetched now. */
+function preloadPage(path: string) {
+  if (/^\/(play|learn)\/./.test(path)) return FreePlay.preload()
+  const screen = { '/learn': Academy, '/stats': Stats, '/record': Recorder, '/settings': Settings, '/how': How }[path.replace(/\/+$/, '')]
+  return screen?.preload()
+}
 
 // Keyed by puzzle so switching cubes starts a fresh session (counters, timer, best).
 function PlayRoute() {
@@ -28,30 +53,38 @@ function LessonRoute() {
   return lessonById(lessonId) ? <FreePlay key={lessonId} lessonId={lessonId} /> : <Navigate to="/learn" replace />
 }
 
-// An address that leads nowhere: say so, show what was asked for, and offer the
-// main ways in rather than silently landing on the home page.
+const BUTTON = 'inline-flex min-h-11 items-center justify-center rounded-xl px-6 font-semibold transition-[translate,background-color,border-color] duration-200 ease-click active:translate-y-px'
+
+// An address that leads nowhere: a face that came apart, what happened in plain
+// words, and the ways back in, rather than silently landing on the home page.
 function NotFound() {
   const { pathname } = useLocation()
   return (
-    <main className="min-h-dvh bg-[#16171B] px-4 py-8 text-[#ECEAE4] sm:px-6 sm:py-12" data-testid="not-found">
-      <div className="mx-auto max-w-2xl">
+    <main className="min-h-dvh bg-ink px-4 py-8 text-fg sm:px-6 sm:py-12" data-testid="not-found">
+      <div className="mx-auto max-w-3xl">
         <SiteNav size={40} />
-        <h1 className="font-display mt-12 text-3xl font-extrabold tracking-tight sm:text-4xl">There is no page here</h1>
-        <p className="mt-3 text-[#B2B0B9]">
-          Nothing on CubePalm lives at <code className="rounded bg-[#202227] px-1.5 py-0.5 text-sm [overflow-wrap:anywhere] text-[#ECEAE4]">{pathname}</code>. The link
-          may be old or mistyped.
-        </p>
-        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-          <Link to="/" className="inline-flex min-h-11 items-center justify-center rounded-full bg-[#FFD500] px-6 font-semibold text-[#16171B] hover:bg-[#FFE04D]">
+        <div className="mt-14 flex flex-col gap-8 sm:mt-20 sm:flex-row sm:items-center sm:gap-12">
+          <ScrambledFace />
+          <div>
+            <h1 className="font-display text-3xl font-extrabold tracking-tight sm:text-4xl">There is no page here</h1>
+            <p className="mt-3 max-w-md text-fg-muted">
+              Nothing on CubePalm lives at <code className="rounded bg-raised px-1.5 py-0.5 text-sm wrap-anywhere text-fg">{pathname}</code>. The link may be old or
+              mistyped.
+            </p>
+          </div>
+        </div>
+        <div className="mt-10 flex flex-col gap-3 sm:flex-row">
+          <Link to="/" className={`${BUTTON} sticker bg-sticker-yellow text-plastic hover:bg-[#ffe04d]`}>
             Go to the home page
           </Link>
-          <Link to="/play/cube3" className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/20 px-6 font-semibold hover:border-white/50">
+          <Link to="/play/cube3" className={`${BUTTON} border border-white/15 hover:border-white/40`}>
             Play the 3×3
           </Link>
-          <Link to="/learn" className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/20 px-6 font-semibold hover:border-white/50">
+          <Link to="/learn" className={`${BUTTON} border border-white/15 hover:border-white/40`}>
             Learn to solve it
           </Link>
         </div>
+        <SiteFooter />
       </div>
     </main>
   )
@@ -93,7 +126,7 @@ function App() {
     // page, so the first click on Play opens at once. Skipped for anyone who has
     // asked their browser to save data.
     const saveData = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData
-    if (!saveData) idle(() => void import('./components/screens/FreePlay').catch(() => undefined))
+    if (!saveData) idle(() => void FreePlay.preload().catch(() => undefined))
     return () => {
       cancelled = true
       unsubscribe()
@@ -104,21 +137,22 @@ function App() {
   return (
     <Router>
       <PageMeta />
+      <PageTurns preload={preloadPage} />
       <div data-testid="app" data-solver-ready={solverReady ? 'true' : 'false'} data-solver-state={solver}>
         <ErrorBoundary>
-        <Suspense fallback={<div className="min-h-dvh bg-[#16171B]" />}>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/play/:puzzleId" element={<PlayRoute />} />
-          <Route path="/learn" element={<Academy />} />
-          <Route path="/learn/:lessonId" element={<LessonRoute />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/stats" element={<Stats />} />
-          <Route path="/record" element={<Recorder />} />
-          <Route path="/how" element={<How />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-        </Suspense>
+          <Suspense fallback={<PageLoader />}>
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/play/:puzzleId" element={<PlayRoute />} />
+              <Route path="/learn" element={<Academy />} />
+              <Route path="/learn/:lessonId" element={<LessonRoute />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/stats" element={<Stats />} />
+              <Route path="/record" element={<Recorder />} />
+              <Route path="/how" element={<How />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </Suspense>
         </ErrorBoundary>
       </div>
     </Router>

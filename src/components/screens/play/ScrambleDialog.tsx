@@ -1,18 +1,27 @@
 import { useEffect, useRef, useState } from 'react'
+import { MoveChip, TurnGlyph } from '../../cube/MoveChip'
+import { LAYER_NAME } from '../../../core/notation'
 import { parseScramble, SCRAMBLE_FACES } from '../../../core/puzzles/scrambleText'
-import { BUTTON, CLOSE, PRIMARY } from './buttonStyles'
+import { BUTTON, CLOSE, KEY_SURFACE, PRIMARY } from './buttonStyles'
+
+const KINDS = [
+  { suffix: '', shown: '', kind: 'clockwise' },
+  { suffix: "'", shown: '′', kind: 'counter' },
+  { suffix: '2', shown: '2', kind: 'double' },
+] as const
 
 /**
  * Setting up a scramble of your own, to practise one position again and again.
- * Type it or paste it, or build it with the buttons (every turn is one tap).
- * Whatever is in the box is checked as you go, so the Use button only ever
- * sets up a scramble that really is one.
+ * Type it or paste it, or build it with the keys (every turn is one tap).
+ * Whatever is in the box is checked as you go and drawn as move chips, so the
+ * Use button only ever sets up a scramble that really is one.
  */
 export function ScrambleDialog({
   initial,
   onUse,
   onRandom,
   onClose,
+  colours = null,
 }: {
   /** What to start the box with: the scramble on the cube now, if any. */
   initial: string
@@ -21,6 +30,8 @@ export function ScrambleDialog({
   /** A fresh random scramble, to edit or use as it is. */
   onRandom: () => Promise<string[]>
   onClose: () => void
+  /** Each face's colour on a solved cube, to label the columns of keys; none for a puzzle without colours. */
+  colours?: Record<string, string> | null
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -53,7 +64,8 @@ export function ScrambleDialog({
       onClick={(e) => {
         if (e.target === dialogRef.current) onClose()
       }}
-      className="m-auto max-h-[calc(100dvh-1.5rem)] w-[min(34rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-3xl open:flex border border-white/10 bg-[#1B1D22] p-0 text-[#ECEAE4] shadow-2xl transition duration-200 starting:translate-y-2 starting:opacity-0 backdrop:bg-black/60 backdrop:backdrop-blur-sm"
+      // It opens like a face of the cube turning towards you.
+      className="m-auto max-h-[calc(100dvh-1.5rem)] w-[min(34rem,calc(100vw-1.5rem))] origin-bottom flex-col overflow-hidden rounded-2xl bg-panel p-0 text-fg shadow-[inset_0_1px_0_rgb(255_255_255/0.07),0_30px_60px_-20px_rgb(0_0_0/0.9)] ring-1 ring-white/8 transition-[opacity,transform] duration-[380ms] ease-turn open:flex backdrop:bg-ink/80 starting:opacity-0 starting:[transform:perspective(1200px)_rotateX(14deg)_translateY(8px)]"
     >
       <form
         className="flex min-h-0 flex-1 flex-col"
@@ -69,7 +81,7 @@ export function ScrambleDialog({
               <h2 id="scramble-dialog-title" className="font-display text-2xl font-extrabold tracking-tight">
                 Choose a scramble
               </h2>
-              <p className="mt-1 text-sm text-[#9C9AA3]">Type or paste one, or build it with the buttons. Starts from a solved cube.</p>
+              <p className="mt-1 text-sm text-fg-faint">Type or paste one, or build it with the keys. Starts from a solved cube.</p>
             </div>
             <button type="button" onClick={onClose} aria-label="Close" className={`${CLOSE} -mr-2 -mt-2 text-2xl`}>
               ×
@@ -96,11 +108,22 @@ export function ScrambleDialog({
             autoCapitalize="characters"
             autoCorrect="off"
             placeholder="R U2 F' L D2 B"
-            className={`mt-5 w-full resize-none rounded-xl border bg-[#16171B] px-3.5 py-3 font-mono text-base leading-relaxed transition-colors placeholder:text-[#77757E] ${error ? 'border-[#E5384F]' : 'border-white/10'}`}
+            className={`mt-5 w-full resize-none rounded-lg bg-plastic px-3.5 py-3 text-lg leading-relaxed tracking-wide shadow-[inset_0_1px_3px_rgb(0_0_0/0.6)] ring-1 transition-shadow placeholder:text-[#77757E] ${error ? 'ring-[#E5384F]' : 'ring-white/8'}`}
             // The focus ring turns red with the border while what is typed is not a scramble.
             style={error ? { outlineColor: '#E5384F' } : undefined}
           />
-          <p id="scramble-dialog-status" data-testid="scramble-status" className={`mt-2 min-h-[1.25rem] text-sm ${error ? 'text-[#FF8A9A]' : 'text-[#9C9AA3]'}`}>
+
+          {/* What the box says, as the moves will be drawn everywhere else: each new one clicks in. */}
+          {turns.length > 0 && (
+            <ol aria-hidden className="mt-3 flex max-h-[4.25rem] flex-wrap gap-1 overflow-y-auto">
+              {turns.map((t, i) => (
+                <li key={i} className="transition duration-300 ease-click starting:scale-75 starting:opacity-0">
+                  <MoveChip move={t} size="sm" />
+                </li>
+              ))}
+            </ol>
+          )}
+          <p id="scramble-dialog-status" data-testid="scramble-status" className={`mt-2 min-h-[1.25rem] text-sm ${error ? 'text-[#FF8A9A]' : 'text-fg-faint'}`}>
             {error ??
               (turns.length === 0
                 ? 'Empty: a solved cube.'
@@ -109,18 +132,30 @@ export function ScrambleDialog({
                   : `${quarters} turns (${turns.length} moves, a half turn counting two).`)}
           </p>
 
-          {/* Every turn there is, one tap each: the face, the other way, the half turn. */}
+          {/* Every turn there is, one tap each: a column per face (headed by its colour), then the other way, then the half turn. */}
           <div className="mt-4 grid grid-cols-6 gap-1.5" data-testid="scramble-keys">
-            {(['', "'", '2'] as const).map((suffix) =>
+            {SCRAMBLE_FACES.map((face) => (
+              <div key={face} aria-hidden className="flex flex-col items-center gap-1 pb-0.5 text-[0.7rem] text-fg-faint">
+                {colours && (
+                  <span className="grid size-3.5 place-items-center rounded-[4px] bg-plastic">
+                    <span className="size-2.5 rounded-[2px]" style={{ background: colours[face] }} />
+                  </span>
+                )}
+                {LAYER_NAME[face]}
+              </div>
+            ))}
+            {KINDS.map(({ suffix, shown, kind }) =>
               SCRAMBLE_FACES.map((face) => (
                 <button
                   key={face + suffix}
                   type="button"
+                  aria-label={face + shown}
                   onClick={() => add(face + suffix)}
-                  className="h-10 rounded-xl border border-white/10 bg-[#202227] font-mono text-sm font-semibold transition hover:border-white/30 active:scale-95 pointer-coarse:h-11"
+                  className={`flex h-10 items-center justify-center gap-0.5 rounded-lg font-display text-sm font-bold transition duration-200 ease-click select-none pointer-coarse:h-11 ${KEY_SURFACE}`}
                 >
                   {face}
-                  {suffix === "'" ? '′' : suffix}
+                  {shown}
+                  <TurnGlyph kind={kind} size={9} className="opacity-55" />
                 </button>
               )),
             )}
@@ -143,10 +178,10 @@ export function ScrambleDialog({
             </button>
           </div>
 
-          <p className="mt-5 text-xs text-[#9C9AA3]">A scramble you choose is practice: it does not count toward your best time.</p>
+          <p className="mt-5 text-xs text-fg-faint">A scramble you choose is practice: it does not count toward your best time.</p>
         </div>
 
-        <div className="flex shrink-0 justify-end border-t border-white/10 px-5 py-4 sm:px-7">
+        <div className="flex shrink-0 justify-end bg-raised/40 px-5 py-4 shadow-[inset_0_1px_0_rgb(255_255_255/0.05)] sm:px-7">
           <div className="flex gap-2">
             <button type="button" className={BUTTON} onClick={onClose}>
               Cancel

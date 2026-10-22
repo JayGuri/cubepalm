@@ -14,7 +14,8 @@ type Slot = [number, number, number]
 
 export type StageGoal = 'cross' | 'firstLayer' | 'secondLayer' | 'topCross' | 'topFace' | 'topCorners' | 'solved'
 
-const NORMAL: Record<Face, Slot> = { U: [0, 1, 0], D: [0, -1, 0], F: [0, 0, 1], B: [0, 0, -1], R: [1, 0, 0], L: [-1, 0, 0] }
+/** Each face's outward direction, which is also the slot of its centre. */
+export const NORMAL: Record<Face, Slot> = { U: [0, 1, 0], D: [0, -1, 0], F: [0, 0, 1], B: [0, 0, -1], R: [1, 0, 0], L: [-1, 0, 0] }
 
 const BOTTOM_EDGES: Slot[] = [[0, -1, 1], [1, -1, 0], [0, -1, -1], [-1, -1, 0]]
 const BOTTOM_CORNERS: Slot[] = [[1, -1, 1], [-1, -1, 1], [1, -1, -1], [-1, -1, -1]]
@@ -43,9 +44,10 @@ const STAGES: Record<StageGoal, StageDefinition> = {
   solved: { slots: TOP_EDGES, test: 'inPlace', unit: 'top edges in place' },
 }
 
-function inspect(state: PuzzleState) {
-  const colors = faceletColors(state)
-  const sticker = (slot: Slot, face: Face) => colors.get(slotId(slot))?.[face]
+/** The colour on one face of the piece at a slot. Any values do, as long as equal colours compare equal. */
+export type StickerReader = (slot: Slot, face: Face) => unknown
+
+function inspect(sticker: StickerReader) {
   const centre = (face: Face) => sticker(NORMAL[face], face)
   return {
     inPlace: (slot: Slot) => facesOfSlot(slot).every((f) => sticker(slot, f) === centre(f)),
@@ -53,8 +55,18 @@ function inspect(state: PuzzleState) {
   }
 }
 
+function readerOf(state: PuzzleState): StickerReader {
+  const colors = faceletColors(state)
+  return (slot, face) => colors.get(slotId(slot))?.[face]
+}
+
 export function stageDone(goal: StageGoal, state: PuzzleState): boolean {
-  const check = inspect(state)
+  return stageDoneOn(goal, readerOf(state))
+}
+
+/** `stageDone` for a cube read some other way, such as the teaching solver's own model. */
+export function stageDoneOn(goal: StageGoal, sticker: StickerReader): boolean {
+  const check = inspect(sticker)
   return STAGE_ORDER.slice(0, STAGE_ORDER.indexOf(goal) + 1).every((g) => {
     const stage = STAGES[g]
     return stage.slots.every((slot) => check[stage.test](slot))
@@ -69,7 +81,7 @@ export interface StageProgress {
 
 /** How many of this stage's own pieces are right (earlier stages are not counted). */
 export function stageProgress(goal: StageGoal, state: PuzzleState): StageProgress {
-  const check = inspect(state)
+  const check = inspect(readerOf(state))
   const stage = STAGES[goal]
   return { done: stage.slots.filter((slot) => check[stage.test](slot)).length, total: stage.slots.length, unit: stage.unit }
 }

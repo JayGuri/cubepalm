@@ -1,15 +1,25 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { LESSONS, type Lesson } from '../core/academy/lessons'
 import { HAND_COLOR } from '../core/gestures/signGestures'
 import type { StageProgress } from '../core/academy/stages'
 import { useAcademyStore } from '../state/academyStore'
+import { prefersReducedMotion } from '../motion/stagger'
 import { SignSequence } from './HandsGuide'
+import { StickerGrid } from './cube/StickerGrid'
+import { GoalCube } from './academy/GoalCube'
+import { MoveText, MovesDemo } from './academy/MovesDemo'
+import { NotationPrimer, PrimerButton } from './academy/NotationPrimer'
+import { rememberProgress } from './academy/progress'
+import { TopFacePictures } from './academy/TopFace'
+import '../styles/academy.css'
 
-// The teaching column beside the cube in an Academy lesson: what to do, the
-// live goal, ways to practise, the algorithm and its finger signs. On a phone
-// it sits above the cube and scrolls on its own, so the parts you act on
-// (goal, practice, the finished message) come before the reading.
+// The teaching column beside the cube in an Academy lesson, in the order a
+// beginner needs it: what you are making (a picture, and stickers that turn
+// over as pieces land), then the practice controls, then how to do it, the
+// moves (seen on a small cube before they are tried), and the hand signs. On a
+// phone it sits above the cube and scrolls inside its own box, so what you act
+// on comes first and the longer reading folds away.
 
 interface Props {
   lesson: Lesson
@@ -30,22 +40,25 @@ interface Props {
 }
 
 const ACTION =
-  'inline-flex min-h-10 items-center rounded-full border border-white/15 px-4 text-sm font-medium text-[#ECEAE4] transition hover:border-white/40 disabled:cursor-not-allowed disabled:opacity-40 pointer-coarse:min-h-11'
-const NAV = 'inline-flex min-h-10 items-center text-sm text-[#9C9AA3] hover:text-[#ECEAE4] pointer-coarse:min-h-11'
-const LABEL = 'text-sm font-semibold text-[#ECEAE4]'
+  'sticker inline-flex min-h-10 items-center rounded-lg bg-raised px-4 text-sm font-semibold text-fg transition-[transform,background-color] duration-200 ease-click hover:bg-[#2a2d34] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40 pointer-coarse:min-h-11'
+const NAV = 'inline-flex min-h-10 items-center text-sm text-fg-faint hover:text-fg pointer-coarse:min-h-11'
+const LABEL = 'text-sm font-semibold text-fg'
+const ORANGE = '#ff8a00'
+const UNSET = '#2a2c33'
 
-const FACE: Record<string, string> = { R: 'Right', L: 'Left', U: 'Up', D: 'Down', F: 'Front', B: 'Back' }
-
-/** "R U' F2" in words: "Right, Up back, Front twice". */
-function inWords(moves: string): string {
-  return (moves.match(/[URFDLB]2?'?/g) ?? [])
-    .map((m) => {
-      const face = FACE[m[0]]
-      if (m.includes('2')) return `${face} twice`
-      if (m.endsWith("'")) return face === 'Back' ? 'Back, reversed' : `${face} back`
-      return face
-    })
-    .join(', ')
+/** A fold-away part of the column. */
+function More({ title, open, children, testId }: { title: string; open: boolean; children: React.ReactNode; testId?: string }) {
+  return (
+    <details open={open} data-testid={testId} className="academy-more mt-6 border-t border-white/[0.07] pt-1">
+      <summary className="flex min-h-10 items-center justify-between gap-3 rounded-md text-sm font-semibold text-fg pointer-coarse:min-h-11">
+        {title}
+        <svg aria-hidden width="12" height="12" viewBox="0 0 12 12" className="academy-chevron shrink-0 text-fg-faint">
+          <path d="m4.5 2.5 3.5 3.5-3.5 3.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </summary>
+      <div className="pb-1">{children}</div>
+    </details>
+  )
 }
 
 export function LessonPanel({ lesson, index, caseNumber, done, note, guiding, watching, progress, signMoves, onWatch, onGuide, onSelectCase }: Props) {
@@ -53,30 +66,39 @@ export function LessonPanel({ lesson, index, caseNumber, done, note, guiding, wa
   const hasPractice = lesson.cases.length > 0
   const prev = LESSONS[index - 1]
   const next = LESSONS[index + 1]
-  const fraction = progress.total ? progress.done / progress.total : 0
+  // Wide screens have room to show everything; a phone starts with the reading folded.
+  const [wide] = useState(() => window.matchMedia('(min-width: 48rem)').matches)
+
+  // Progress as it was before this lesson, so /learn can turn the new sticker over.
+  useEffect(() => rememberProgress(useAcademyStore.getState().completed), [])
+
+  // One sticker per piece the goal counts, turning over as each one lands.
+  const placed = done ? progress.total : progress.done
+  const stickers = useMemo(() => Array.from({ length: progress.total }, (_, i) => (i < placed ? ORANGE : UNSET)), [placed, progress.total])
 
   // On a phone the panel is short and scrolls by itself: bring a new
   // "complete" message or wrong-move note into view inside it.
   const alertRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!done && !note) return
-    const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    alertRef.current?.scrollIntoView({ block: 'nearest', behavior: smooth ? 'smooth' : 'auto' })
+    alertRef.current?.scrollIntoView({ block: 'nearest', behavior: prefersReducedMotion() ? 'auto' : 'smooth' })
   }, [done, note])
+
+  const algs = lesson.algorithm ? [lesson.algorithm, ...(lesson.algorithm.mirror ? [lesson.algorithm.mirror] : [])] : []
 
   return (
     <aside
       data-testid="lesson-panel"
-      className="flex max-h-[46%] shrink-0 flex-col overflow-y-auto overscroll-contain border-b border-white/[0.07] bg-[#1B1D22] px-4 pb-4 pt-2 sm:px-5 md:max-h-none md:w-92 md:border-b-0 md:border-r md:pb-5 md:pt-3"
+      className="flex max-h-[46%] shrink-0 flex-col overflow-y-auto overscroll-contain border-b border-white/[0.07] bg-panel px-4 pb-4 pt-2 sm:px-5 md:max-h-none md:w-96 md:border-b-0 md:border-r md:pb-5 md:pt-4"
     >
       <div className="flex items-center gap-3">
-        <p className="shrink-0 text-sm font-semibold text-[#FFA94D]">
+        <p className="shrink-0 text-sm font-semibold text-sticker-orange">
           Lesson {index + 1} of {LESSONS.length}
         </p>
-        {/* On a phone eight dots are too narrow to tap; they only show where you are, and Back / Skip move between lessons. */}
+        {/* On a phone eight stickers are too narrow to tap; they only show where you are, and Back / Skip move between lessons. */}
         <div aria-hidden className="flex flex-1 items-center gap-1 sm:hidden">
           {LESSONS.map((l, i) => (
-            <span key={l.id} className={`h-2 flex-1 rounded-full ${i === index ? 'bg-[#FF8A00]' : completed.includes(l.id) ? 'bg-[#2FB36B]' : 'bg-white/15'}`} />
+            <span key={l.id} className={`h-2 flex-1 rounded-[3px] ${i === index ? 'bg-fg' : completed.includes(l.id) ? 'bg-sticker-orange' : 'bg-white/15'}`} />
           ))}
         </div>
         <nav aria-label="Lessons" className="flex flex-1 items-center gap-1 max-sm:hidden">
@@ -90,73 +112,72 @@ export function LessonPanel({ lesson, index, caseNumber, done, note, guiding, wa
               className="group flex h-8 flex-1 items-center pointer-coarse:h-11"
             >
               <span
-                className={`h-2 w-full rounded-full transition ${
-                  i === index ? 'bg-[#FF8A00]' : completed.includes(l.id) ? 'bg-[#2FB36B]' : 'bg-white/15 group-hover:bg-white/35'
+                className={`h-2 w-full rounded-[3px] transition-colors ${
+                  i === index ? 'bg-fg' : completed.includes(l.id) ? 'bg-sticker-orange' : 'bg-white/15 group-hover:bg-white/35'
                 }`}
               />
             </Link>
           ))}
         </nav>
       </div>
-      <h1 className="font-display text-xl font-bold leading-tight md:text-2xl">{lesson.title}</h1>
 
-      <section className="mt-2 rounded-xl border border-white/10 bg-[#16171B] p-3 md:mt-4 md:p-4" aria-label="Goal">
-        <p className="text-[15px] leading-snug text-[#ECEAE4]">
-          <span className="text-[#9C9AA3] md:mb-0.5 md:block md:text-sm">
-            Your goal<span className="md:hidden">:</span>
-          </span>{' '}
-          {lesson.goalText}
-        </p>
-        <div
-          role="progressbar"
-          aria-valuemin={0}
-          aria-valuemax={progress.total}
-          aria-valuenow={progress.done}
-          aria-label={progress.unit}
-          className="mt-2.5 h-2 overflow-hidden rounded-full bg-white/10 md:mt-3"
-        >
-          <div
-            className={`h-full rounded-full transition-[width] duration-500 ${done ? 'bg-[#2FB36B]' : 'bg-[#FF8A00]'}`}
-            style={{ width: `${(done ? 1 : fraction) * 100}%` }}
-          />
+      <div className="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <h1 className="font-display text-xl font-bold leading-tight md:text-2xl">{lesson.title}</h1>
+        {lesson.goal && <PrimerButton />}
+      </div>
+
+      {/* What you are making, and how far the cube on screen has got. */}
+      <section className="mt-2.5 flex gap-3 rounded-xl bg-ink p-3 md:mt-4" aria-label="Goal">
+        <div aria-hidden className="grid size-14 shrink-0 place-items-center md:size-18">
+          <GoalCube lessonId={lesson.id} cubie={wide ? 15 : 12} />
         </div>
-        <p data-testid="lesson-progress" className="mt-1.5 text-sm tabular-nums text-[#9C9AA3]">
-          {progress.done} of {progress.total} {progress.unit}
-        </p>
+        <div className="min-w-0 flex-1">
+          <p className="text-[15px] leading-snug text-fg">
+            <span className="text-fg-faint">{lesson.goal ? 'You are making: ' : 'Try this: '}</span>
+            {lesson.goalText}
+          </p>
+          <div
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={progress.total}
+            aria-valuenow={placed}
+            aria-label={progress.unit}
+            className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1"
+          >
+            <StickerGrid colours={stickers} cols={progress.total} sticker={11} gap={2} round={0.22} from="first" each={0} duration={420} />
+            <p data-testid="lesson-progress" className="text-sm tabular-nums text-fg-muted">
+              {progress.done} of {progress.total} {progress.unit}
+            </p>
+          </div>
+        </div>
       </section>
 
       <div ref={alertRef} className="scroll-my-3">
-      {done && (
-        <div data-testid="lesson-done" className="mt-3 rounded-xl border border-[#2FB36B]/40 bg-[#2FB36B]/10 p-4" role="status">
-          <p className="font-display text-lg font-bold text-[#4ED48A]">{next ? 'Lesson complete' : 'You solved the cube'}</p>
-          <p className="mt-0.5 text-sm text-[#C9C7CF]">
-            {!next ? 'You have learned the whole method. Now solve one from a real scramble.' : hasPractice ? 'Try another practice position, or move on when you are ready.' : 'Move on when you are ready.'}
-          </p>
-          {next ? (
+        {done && (
+          <div data-testid="lesson-done" className="mt-3 rounded-xl bg-sticker-orange/10 p-4 ring-1 ring-inset ring-sticker-orange/45" role="status">
+            <p className="font-display text-lg font-bold text-fg">{next ? 'Lesson complete' : 'You solved the cube'}</p>
+            <p className="mt-0.5 text-sm text-fg-muted">
+              {!next ? 'You have learned the whole method. Now solve one from a real scramble.' : hasPractice ? 'Try another practice position, or move on when you are ready.' : 'Move on when you are ready.'}
+            </p>
             <Link
-              to={`/learn/${next.id}`}
-              data-testid="next-lesson"
-              className="mt-3 inline-flex min-h-10 items-center rounded-full bg-[#FFD500] px-5 text-sm font-semibold text-[#16171B] hover:bg-[#FFE04D] pointer-coarse:min-h-11"
+              to={next ? `/learn/${next.id}` : '/play/cube3'}
+              data-testid={next ? 'next-lesson' : undefined}
+              className="sticker mt-3 inline-flex min-h-10 items-center rounded-lg bg-sticker-yellow px-4 text-sm font-semibold text-plastic transition-transform duration-200 ease-click hover:bg-[#ffe04d] active:translate-y-px pointer-coarse:min-h-11"
             >
-              Next: {next.title}
+              {next ? `Next: ${next.title}` : 'Solve a scrambled cube'}
             </Link>
-          ) : (
-            <Link
-              to="/play/cube3"
-              className="mt-3 inline-flex min-h-10 items-center rounded-full bg-[#FFD500] px-5 text-sm font-semibold text-[#16171B] hover:bg-[#FFE04D] pointer-coarse:min-h-11"
-            >
-              Solve a scrambled cube
-            </Link>
-          )}
-        </div>
-      )}
+          </div>
+        )}
 
-      {note && (
-        <p data-testid="lesson-note" role="status" className="mt-3 rounded-lg bg-[#F5B83D]/10 px-3 py-2 text-sm text-[#F5B83D]">
-          {note}
-        </p>
-      )}
+        {note && (
+          <p data-testid="lesson-note" role="status" className="mt-3 rounded-lg bg-[#F5B83D]/10 px-3 py-2 text-sm text-[#F5B83D]">
+            {note}
+          </p>
+        )}
       </div>
+
+      {/* Wave 2: the guided-step card ("Now: bring the white-red edge down", from
+          src/core/academy/teach) goes here, between the goal and the practice controls. */}
 
       {hasPractice && (
         <section className="mt-4" aria-labelledby="practice-label">
@@ -173,8 +194,8 @@ export function LessonPanel({ lesson, index, caseNumber, done, note, guiding, wa
                   aria-pressed={caseNumber === i + 1}
                   aria-label={`Practice position ${i + 1}`}
                   onClick={() => onSelectCase(i)}
-                  className={`font-display h-9 w-9 rounded-lg font-bold transition pointer-coarse:h-11 pointer-coarse:w-11 ${
-                    caseNumber === i + 1 ? 'bg-[#FF8A00] text-[#16171B]' : 'bg-white/10 text-[#ECEAE4] hover:bg-white/20'
+                  className={`font-display h-9 w-9 rounded-lg font-bold transition-[transform,background-color] duration-200 ease-click active:translate-y-px pointer-coarse:h-11 pointer-coarse:w-11 ${
+                    caseNumber === i + 1 ? 'sticker bg-sticker-orange text-plastic' : 'bg-raised text-fg hover:bg-[#2a2d34]'
                   }`}
                 >
                   {i + 1}
@@ -182,16 +203,9 @@ export function LessonPanel({ lesson, index, caseNumber, done, note, guiding, wa
               ))}
             </div>
           </div>
-          <p className="mt-2 text-sm text-[#9C9AA3]">Solve it on the cube yourself, or get help:</p>
+          <p className="mt-2 text-sm text-fg-faint">Solve it on the big cube yourself, or get help:</p>
           <div className="mt-2 flex flex-wrap gap-2">
-            <button
-              type="button"
-              data-testid="watch-it"
-              className={ACTION}
-              onClick={onWatch}
-              disabled={guiding || done}
-              title="Plays the whole solution for you to watch"
-            >
+            <button type="button" data-testid="watch-it" className={ACTION} onClick={onWatch} disabled={guiding || done} title="Plays the whole solution for you to watch">
               Watch it
             </button>
             <button
@@ -208,49 +222,63 @@ export function LessonPanel({ lesson, index, caseNumber, done, note, guiding, wa
         </section>
       )}
 
-      <section className="mt-5" aria-labelledby="how-label">
+      <section className="mt-6" aria-labelledby="how-label">
         <h2 id="how-label" className={LABEL}>
           How to do it
         </h2>
-        {index > 0 && <p className="mt-1 text-sm text-[#9C9AA3]">Hold the cube with white on the bottom and yellow on top.</p>}
-        <ol className="mt-3 space-y-3 text-[15px] leading-relaxed text-[#C9C7CF]">
+        {index > 0 && <p className="mt-1 text-sm text-fg-faint">Hold the cube with white on the bottom and yellow on top.</p>}
+        <ol className="mt-3 space-y-3 text-[15px] leading-relaxed text-fg-muted">
           {lesson.steps.map((step, i) => (
             <li key={i} className="flex gap-3">
-              <span className="font-display mt-0.5 w-5 shrink-0 text-lg font-bold leading-none text-[#FF8A00]" aria-hidden>
+              <span aria-hidden className="sticker mt-1 grid size-5 shrink-0 place-items-center rounded-sm bg-raised font-display text-xs font-bold text-fg">
                 {i + 1}
               </span>
-              <span>{step}</span>
+              <span>
+                <MoveText text={step} />
+              </span>
             </li>
           ))}
         </ol>
+        {lesson.goal && <TopFacePictures lessonId={lesson.id} />}
+        {hasPractice && <p className="mt-3 text-sm text-fg-faint">The practice positions are already held the right way round, so you will not need to turn the whole cube.</p>}
       </section>
 
-      {lesson.algorithm && (
-        <section className="mt-5 rounded-xl border border-white/10 bg-[#16171B] p-4" aria-labelledby="alg-label">
-          <h2 id="alg-label" className={LABEL}>
-            {lesson.algorithm.name}
+      {lesson.stuck && (
+        <More title="If you are stuck" open={false}>
+          <ul className="mt-2 space-y-3">
+            {lesson.stuck.map((s) => (
+              <li key={s.when} className="rounded-lg bg-ink p-3 text-sm leading-relaxed">
+                <p className="font-semibold text-fg">{s.when}</p>
+                <p className="mt-1 text-fg-muted">
+                  <MoveText text={s.then} />
+                </p>
+              </li>
+            ))}
+          </ul>
+        </More>
+      )}
+
+      {lesson.algorithm && <MovesDemo key={lesson.id} lessonId={lesson.id} algs={algs} hint={lesson.algorithm.hint} />}
+
+      {!lesson.goal && (
+        <section className="mt-6" aria-labelledby="letters-label">
+          <h2 id="letters-label" className={`${LABEL} mb-3`}>
+            The letters
           </h2>
-          <p data-testid="lesson-algorithm" className="mt-1.5 wrap-break-word font-mono text-xl leading-snug tracking-wide text-[#ECEAE4]">
-            {lesson.algorithm.moves}
-          </p>
-          <p className="mt-1.5 text-sm text-[#C9C7CF]">{inWords(lesson.algorithm.moves)}</p>
-          <p className="mt-2 border-t border-white/[0.07] pt-2 text-sm text-[#9C9AA3]">{lesson.algorithm.hint}</p>
+          <NotationPrimer />
         </section>
       )}
 
       {signMoves && (
-        <section className="mt-5" data-testid="lesson-signs" aria-labelledby="signs-label">
-          <h2 id="signs-label" className={LABEL}>
-            With your hands
-          </h2>
-          <p className="mt-1 text-sm text-[#9C9AA3]">
-            The <b style={{ color: HAND_COLOR.Right }}>right hand</b> turns clockwise, the <b style={{ color: HAND_COLOR.Left }}>left hand</b>{' '}
-            counter-clockwise. Raise the lit fingers and hold.
+        <More title="With your hands" open={wide} testId="lesson-signs">
+          <p className="mt-1 text-sm text-fg-faint">
+            The <b style={{ color: HAND_COLOR.Right }}>right hand</b> turns clockwise, the <b style={{ color: HAND_COLOR.Left }}>left hand</b> counter-clockwise. Raise
+            the lit fingers and hold.
           </p>
           <div className="mt-2">
             <SignSequence moves={signMoves} />
           </div>
-        </section>
+        </More>
       )}
 
       <div className="mt-auto flex flex-wrap items-center justify-between gap-x-4 pt-5">

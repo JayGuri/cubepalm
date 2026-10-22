@@ -17,37 +17,24 @@ const levelOf = (frame: LandmarkFrame): Level => {
   return best < 0.5 ? 'low' : best < 0.8 ? 'ok' : 'good'
 }
 
+// A small light: grey with no hand, orange when the reading is shaky, green when it is good.
+const READING: Record<Level, { label: string; light: string; text: string }> = {
+  none: { label: 'No hand detected', light: 'bg-fg-faint/60', text: 'text-fg-faint' },
+  low: { label: 'Low confidence: try more light', light: 'bg-sticker-orange', text: 'text-sticker-orange' },
+  ok: { label: 'Tracking', light: 'bg-sticker-green/70', text: 'text-fg-muted' },
+  good: { label: 'Tracking well', light: 'bg-sticker-green', text: 'text-fg' },
+}
+
 export function GestureConfidenceIndicator({ feed }: GestureConfidenceIndicatorProps) {
   // Re-renders only when the reading changes band, not on every frame.
   const [level, setLevel] = useState<Level>('none')
   useEffect(() => feed.subscribe((frame) => setLevel(levelOf(frame))), [feed])
-
-  let label: string
-  let colorClass: string
-  if (level === 'none') {
-    label = 'No hand detected'
-    colorClass = 'text-[#9C9AA3]'
-  } else if (level === 'low') {
-    label = 'Low confidence: try more light'
-    colorClass = 'text-[#F5A524]'
-  } else if (level === 'ok') {
-    label = 'Tracking'
-    colorClass = 'text-[#9C9AA3]'
-  } else {
-    label = 'Tracking well'
-    colorClass = 'text-[#22C55E]'
-  }
+  const { label, light, text } = READING[level]
 
   return (
-    <div
-      data-testid="gesture-confidence"
-      className={`flex items-center gap-2 rounded-full bg-black/40 px-3 py-1 text-xs font-medium ${colorClass}`}
-    >
-      <span
-        className="h-2 w-2 rounded-full"
-        style={{ backgroundColor: level === 'none' ? '#9C9AA3' : level === 'low' ? '#F5A524' : '#22C55E' }}
-      />
-      {label}
+    <div data-testid="gesture-confidence" className={`flex min-w-0 items-center gap-1.5 text-xs font-medium ${text}`}>
+      <span aria-hidden className={`sticker size-2 shrink-0 rounded-xs transition-colors duration-300 ${light}`} />
+      <span className="truncate">{label}</span>
     </div>
   )
 }

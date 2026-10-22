@@ -112,7 +112,8 @@ test('Home: a sign held in the demo turns a layer, and the left hand turns it th
   await expect(page.getByTestId('sign-readout')).toContainText("R")
   await expect(page.getByTestId('sign-turns')).toHaveText('1 turn made.', { timeout: 5_000 })
   await page.getByTestId('sign-hand-left').click()
-  await expect(page.getByTestId('sign-readout')).toContainText("R'")
+  // The move is drawn as a MoveChip, which writes the prime as a typographic apostrophe.
+  await expect(page.getByTestId('sign-readout')).toContainText(/R['’]/)
   await expect(page.getByTestId('sign-turns')).toHaveText('2 turns made.', { timeout: 5_000 })
   // Toggling a finger to a pattern that is not a sign makes no turn.
   await page.getByTestId('finger-ring').click()
