@@ -13,7 +13,7 @@ function BarChart({ counts, width, expected, label }: { counts: number[]; width:
   const pad = { l: 36, r: 8, t: 10, b: 20 }
   const w = width - pad.l - pad.r
   const h = height - pad.t - pad.b
-  const max = Math.max(expected * 1.3, ...counts)
+  const max = Math.max(expected * 1.3, ...counts, 1) // never 0: nothing drawn yet would make the scale 0 / 0
   const bw = w / counts.length
   const y = (v: number) => pad.t + (1 - v / max) * h
   return (

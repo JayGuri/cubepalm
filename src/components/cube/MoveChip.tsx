@@ -54,6 +54,7 @@ export function MoveChip({
         state === 'current' ? '-translate-y-0.5' : ''
       } ${className}`}
       title={moveWords(move)}
+      role="img"
       aria-label={moveWords(move)}
     >
       <span aria-hidden>
