@@ -77,7 +77,7 @@ export function SolutionPlayer({ status, moves, index, playing, speed, steps, op
             {/* On a short landscape screen the panel's own width is squeezed well below the stage's,
                 so the chip strip (a nice-to-have beside the status text) gives way first. */}
             <div className="[@media(max-height:30rem)]:hidden">
-              <RouteStrip moves={moves} index={index} size="sm" trim={['', '@max-[24rem]:hidden', '@max-[40rem]:hidden']} />
+              <RouteStrip moves={moves} index={index} size="sm" trim={['', '@max-[26rem]:hidden', '@max-[40rem]:hidden']} />
             </div>
             {/* On a narrow stage the strip and the keys make the first line; the status its own
                 full-width line next; speed and Stop share a last line, spread apart. */}
