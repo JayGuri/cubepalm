@@ -14,9 +14,10 @@
 //            non-slice edges' permutation (8! = 40320) and slice permutation (4! = 24).
 //
 // Each phase is an IDA* search (iterative deepening) guided by pruning tables:
-// for every pair of coordinates, the exact cost still needed, found once by a
-// breadth-first search. A table value never over-estimates, so cutting a branch
-// whose value exceeds what is left to spend never loses a solution.
+// lower bounds on the cost still needed that never over-estimate, so cutting a
+// branch whose bound exceeds what is left to spend never loses a solution.
+// Phase 1 uses the EXACT phase-1 cost once phase1Table.ts has built it (built
+// in the background; until then, three smaller tables).
 //
 // Cost is counted in QUARTER TURNS (R2 costs two), because that is what the
 // on-screen guide counts: one sign, key press or drag is one quarter turn.
@@ -31,218 +32,67 @@
 // the shortest. A second search -- plain IDA* over the whole cube, guided by
 // several more lower bounds -- either finds a cheaper solution (which is then the
 // shortest possible, because IDA* tries costs in increasing order) or rules out
-// every cost below the answer, which proves it optimal. That is quick for cubes
-// a dozen or so steps from solved -- the end of every guided solve -- and gives
-// up gracefully on fully scrambled cubes, where a proof would take hours.
+// every cost below the answer, which proves it optimal.
+//
+// PARITY. Every quarter turn is an odd permutation of the corners and a half
+// turn an even one, so every solution of a given cube costs an odd number of
+// quarter turns or every one an even number, fixed by the cube's corner
+// arrangement. Both searches use it: a route cheaper than C costs at most C - 2,
+// so the level just below C (the most expensive one) never needs searching.
 
-/** Moves are numbered face * 3 + (0: clockwise, 1: half turn, 2: counter-clockwise). */
-const FACE_LETTERS = 'URFDLB'
-const N_MOVES = 18
+import {
+  ALL_MOVES,
+  ALLOWED,
+  applyMoves,
+  AXIS_SYM,
+  CONJ_MOVE,
+  conjugate,
+  EDGES_A,
+  EDGES_B,
+  edgeSlotsOf,
+  FACE_LETTERS,
+  flipOf,
+  isPhase2Move,
+  isSolvedCubie,
+  MOVES,
+  multiply,
+  N_EDGE3,
+  N_EDGE4,
+  N_FLIP,
+  N_MOVES,
+  N_PERM4,
+  N_PERM8,
+  N_SLICE,
+  N_SYM,
+  N_SYM_UD,
+  N_TWIST,
+  parityOf,
+  permRank,
+  permUnrank,
+  PHASE2_MOVES,
+  quarterCost,
+  SLICE_EDGES,
+  SLICE_GOAL,
+  slicePositionOf,
+  SLOT_AFTER,
+  SOLVED,
+  twistOf,
+  type Cubie,
+} from './cubie'
+import { buildPhase1TableStep, getPhase1Table, initPhase1Table, isPhase1TableReady, N_PHASE1, phase1Cost, phase1Moves, phase1TableBuildMs, type Phase1Table } from './phase1Table'
 
-// ---- Cubie model ---------------------------------------------------------
-// Corners: URF UFL ULB UBR DFR DLF DBL DRB.  Edges: UR UF UL UB DR DF DL DB FR FL BL BR.
-export interface Cubie {
-  cp: number[] // which corner sits in each corner slot
-  co: number[] // its twist, 0..2
-  ep: number[] // which edge sits in each edge slot
-  eo: number[] // its flip, 0..1
-}
-
-const [URF, UFL, ULB, UBR, DFR, DLF, DBL, DRB] = [0, 1, 2, 3, 4, 5, 6, 7]
-const [UR, UF, UL, UB, DR, DF, DL, DB, FR, FL, BL, BR] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
-const zeros = (n: number) => new Array<number>(n).fill(0)
-
-// The six clockwise quarter turns, as permutations plus orientation changes.
-const BASIC_MOVES: Cubie[] = [
-  // U
-  { cp: [UBR, URF, UFL, ULB, DFR, DLF, DBL, DRB], co: zeros(8), ep: [UB, UR, UF, UL, DR, DF, DL, DB, FR, FL, BL, BR], eo: zeros(12) },
-  // R
-  { cp: [DFR, UFL, ULB, URF, DRB, DLF, DBL, UBR], co: [2, 0, 0, 1, 1, 0, 0, 2], ep: [FR, UF, UL, UB, BR, DF, DL, DB, DR, FL, BL, UR], eo: zeros(12) },
-  // F
-  { cp: [UFL, DLF, ULB, UBR, URF, DFR, DBL, DRB], co: [1, 2, 0, 0, 2, 1, 0, 0], ep: [UR, FL, UL, UB, DR, FR, DL, DB, UF, DF, BL, BR], eo: [0, 1, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0] },
-  // D
-  { cp: [URF, UFL, ULB, UBR, DLF, DBL, DRB, DFR], co: zeros(8), ep: [UR, UF, UL, UB, DF, DL, DB, DR, FR, FL, BL, BR], eo: zeros(12) },
-  // L
-  { cp: [URF, ULB, DBL, UBR, DFR, UFL, DLF, DRB], co: [0, 1, 2, 0, 0, 2, 1, 0], ep: [UR, UF, BL, UB, DR, DF, FL, DB, FR, UL, DL, BR], eo: zeros(12) },
-  // B
-  { cp: [URF, UFL, UBR, DRB, DFR, DLF, ULB, DBL], co: [0, 0, 1, 2, 0, 0, 2, 1], ep: [UR, UF, UL, BR, DR, DF, DL, BL, FR, FL, UB, DB], eo: [0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 1] },
-]
-
-const SOLVED: Cubie = {
-  cp: [0, 1, 2, 3, 4, 5, 6, 7],
-  co: zeros(8),
-  ep: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
-  eo: zeros(12),
-}
-
-/** `a` then `b`. */
-function multiply(a: Cubie, b: Cubie): Cubie {
-  const cp: number[] = []
-  const co: number[] = []
-  const ep: number[] = []
-  const eo: number[] = []
-  for (let c = 0; c < 8; c++) {
-    cp[c] = a.cp[b.cp[c]]
-    co[c] = (a.co[b.cp[c]] + b.co[c]) % 3
-  }
-  for (let e = 0; e < 12; e++) {
-    ep[e] = a.ep[b.ep[e]]
-    eo[e] = (a.eo[b.ep[e]] + b.eo[e]) % 2
-  }
-  return { cp, co, ep, eo }
-}
-
-// All 18 moves: each face turned once, twice and three times.
-const MOVES: Cubie[] = []
-for (let f = 0; f < 6; f++) {
-  let m = BASIC_MOVES[f]
-  for (let p = 0; p < 3; p++) {
-    MOVES.push(m)
-    m = multiply(m, BASIC_MOVES[f])
-  }
-}
-const ALL_MOVES = Array.from({ length: N_MOVES }, (_, i) => i)
-
-/** Phase 2 may only use U D (any turn) and half turns of R L F B. */
-const PHASE2_MOVES = [0, 1, 2, 9, 10, 11, 4, 7, 13, 16]
-const isPhase2Move = (m: number) => {
-  const face = (m / 3) | 0
-  return face === 0 || face === 3 || m % 3 === 1
-}
-
-const quarterCost = (m: number) => (m % 3 === 1 ? 2 : 1)
-
-// A move may not repeat the last face, and of two opposite faces only the
-// U-before-D order is allowed (R L and L R reach the same place). Indexed by
-// (last move + 1) * 18 + move, so "no last move" is row 0.
-const ALLOWED = new Uint8Array(19 * N_MOVES)
-for (let last = -1; last < N_MOVES; last++) {
-  for (let m = 0; m < N_MOVES; m++) {
-    const f = (m / 3) | 0
-    const lf = last < 0 ? -9 : (last / 3) | 0
-    ALLOWED[(last + 1) * N_MOVES + m] = f !== lf && f + 3 !== lf ? 1 : 0
-  }
-}
-
-const isSolvedCubie = (c: Cubie) =>
-  c.cp.every((v, i) => v === i) && c.ep.every((v, i) => v === i) && c.co.every((v) => v === 0) && c.eo.every((v) => v === 0)
-
-// ---- Coordinates ---------------------------------------------------------
-const N_TWIST = 2187
-const N_FLIP = 2048
-const N_SLICE = 495
-const N_PERM8 = 40320
-const N_PERM4 = 24
-const N_EDGE3 = 12 ** 3 // slots of three named edges, written in base 12
-const N_EDGE4 = 12 ** 4 // slots of four named edges
-
-const FACTORIAL = [1, 1, 2, 6, 24, 120, 720, 5040, 40320]
-const choose = (n: number, k: number) => {
-  if (k < 0 || k > n) return 0
-  let r = 1
-  for (let i = 1; i <= k; i++) r = (r * (n - k + i)) / i
-  return r
-}
-
-const twistOf = (co: number[]) => co.slice(0, 7).reduce((t, v) => t * 3 + v, 0)
-const flipOf = (eo: number[]) => eo.slice(0, 11).reduce((t, v) => t * 2 + v, 0)
-
-function twistToCo(t: number): number[] {
-  const co = zeros(8)
-  let sum = 0
-  for (let i = 6; i >= 0; i--) {
-    co[i] = t % 3
-    sum += co[i]
-    t = (t / 3) | 0
-  }
-  co[7] = (3 - (sum % 3)) % 3
-  return co
-}
-
-function flipToEo(t: number): number[] {
-  const eo = zeros(12)
-  let sum = 0
-  for (let i = 10; i >= 0; i--) {
-    eo[i] = t % 2
-    sum += eo[i]
-    t = (t / 2) | 0
-  }
-  eo[11] = sum % 2
-  return eo
-}
-
-/** Which 4 of the 12 edge slots hold slice edges (values 8..11): a number 0..494. */
-function slicePositionOf(ep: number[]): number {
-  let rank = 0
-  let k = 1
-  for (let slot = 0; slot < 12; slot++) {
-    if (ep[slot] >= 8) rank += choose(slot, k++)
-  }
-  return rank
-}
-
-/** A representative edge arrangement for a slice position (slice slots hold 8, the rest 0). */
-function sliceToEp(rank: number): number[] {
-  const ep = zeros(12)
-  for (let k = 4; k >= 1; k--) {
-    let slot = 11
-    while (choose(slot, k) > rank) slot--
-    rank -= choose(slot, k)
-    ep[slot] = 8
-  }
-  return ep
-}
-
-/** Position of a permutation among all n! permutations (Lehmer code). */
-function permRank(p: number[], n: number): number {
-  let rank = 0
-  for (let i = 0; i < n - 1; i++) {
-    let smaller = 0
-    for (let j = i + 1; j < n; j++) if (p[j] < p[i]) smaller++
-    rank += smaller * FACTORIAL[n - 1 - i]
-  }
-  return rank
-}
-
-function permUnrank(rank: number, n: number): number[] {
-  const free = Array.from({ length: n }, (_, i) => i)
-  const p: number[] = []
-  for (let i = 0; i < n; i++) {
-    const f = FACTORIAL[n - 1 - i]
-    const idx = (rank / f) | 0
-    rank -= idx * f
-    p.push(free.splice(idx, 1)[0])
-  }
-  return p
-}
-
-// Where an edge in slot s goes after move m. (A move sends the piece in slot
-// MOVES[m].ep[e] to slot e.)
-const SLOT_AFTER: number[][] = MOVES.map((mv) => {
-  const out = zeros(12)
-  for (let e = 0; e < 12; e++) out[mv.ep[e]] = e
-  return out
-})
-
-/** The slots holding the given edges, as one base-12 number. */
-function edgeSlotsOf(ep: number[], ids: number[]): number {
-  let code = 0
-  let place = 1
-  for (const id of ids) {
-    code += ep.indexOf(id) * place
-    place *= 12
-  }
-  return code
-}
+export type { Cubie }
+export { buildPhase1TableStep, initPhase1Table, isPhase1TableReady }
 
 // ---- Tables --------------------------------------------------------------
 interface Tables {
   twistMove: Uint16Array
   flipMove: Uint16Array
   sliceMove: Uint16Array
-  cpermMove: Uint16Array
-  uedgeMove: Uint16Array
-  spermMove: Uint8Array
+  cpermMove: Uint16Array // corner permutation, all 18 moves
+  uedgeMove: Uint16Array // the eight U and D edges' permutation, phase-2 moves
+  spermMove: Uint8Array // the four slice edges' permutation, phase-2 moves
+  edge4Move: Uint16Array // slots of any four named edges, all 18 moves
   prune1Twist: Int8Array // slice x twist  -> cost to reach G1
   prune1Flip: Int8Array // slice x flip
   prune1TwistFlip: Int8Array // twist x flip
@@ -252,9 +102,7 @@ interface Tables {
 
 // Extra lower bounds for the optimal search, over the whole cube.
 interface ProofTables {
-  cpermMove: Uint16Array // corner permutation under all 18 moves
   edge3Move: Uint16Array // slots of any three named edges
-  edge4Move: Uint16Array // slots of any four named edges
   pruneCorners: Int8Array // corner permutation -> cost
   pruneEdges6: Int8Array // slots of UR UF UL x slots of UB DR DF -> cost
   pruneSlice: Int8Array // slots of FR FL BL BR -> cost
@@ -293,15 +141,17 @@ function buildPrune(
 ): Int8Array {
   const dist = new Int8Array(n1 * n2).fill(-1)
   dist[goal1 * n2 + goal2] = 0
+  const costs = moves.map(quarterCost)
   let deepest = 0
   for (let level = 0; level <= deepest; level++) {
     for (let i = 0; i < dist.length; i++) {
       if (dist[i] !== level) continue
       const a = (i / n2) | 0
       const b = i - a * n2
-      for (const m of moves) {
+      for (let k = 0; k < moves.length; k++) {
+        const m = moves[k]
         const next = move1[a * N_MOVES + m] * n2 + move2[b * N_MOVES + m]
-        const cost = level + quarterCost(m)
+        const cost = level + costs[k]
         if (dist[next] < 0 || dist[next] > cost) {
           dist[next] = cost
           if (cost > deepest) deepest = cost
@@ -323,20 +173,8 @@ export function initTwoPhase(): void {
 }
 
 function buildTwoPhaseTables(): void {
-
-  const twistMove = buildMoveTable(new Uint16Array(N_TWIST * N_MOVES), N_TWIST, ALL_MOVES, (t, m) => {
-    const co = twistToCo(t)
-    return twistOf(co.map((_, c) => (co[MOVES[m].cp[c]] + MOVES[m].co[c]) % 3))
-  })
-  const flipMove = buildMoveTable(new Uint16Array(N_FLIP * N_MOVES), N_FLIP, ALL_MOVES, (t, m) => {
-    const eo = flipToEo(t)
-    return flipOf(eo.map((_, e) => (eo[MOVES[m].ep[e]] + MOVES[m].eo[e]) % 2))
-  })
-  const sliceMove = buildMoveTable(new Uint16Array(N_SLICE * N_MOVES), N_SLICE, ALL_MOVES, (r, m) => {
-    const ep = sliceToEp(r)
-    return slicePositionOf(ep.map((_, e) => ep[MOVES[m].ep[e]]))
-  })
-  const cpermMove = buildMoveTable(new Uint16Array(N_PERM8 * N_MOVES), N_PERM8, PHASE2_MOVES, (r, m) => {
+  const { twistMove, flipMove, sliceMove } = phase1Moves()
+  const cpermMove = buildMoveTable(new Uint16Array(N_PERM8 * N_MOVES), N_PERM8, ALL_MOVES, (r, m) => {
     const cp = permUnrank(r, 8)
     return permRank(cp.map((_, c) => cp[MOVES[m].cp[c]]), 8)
   })
@@ -348,8 +186,8 @@ function buildTwoPhaseTables(): void {
     const sp = permUnrank(r, 4)
     return permRank([0, 1, 2, 3].map((e) => sp[MOVES[m].ep[8 + e] - 8]), 4)
   })
+  const edge4Move = subsetMove(4)
 
-  const sliceGoal = slicePositionOf(SOLVED.ep)
   tables = {
     twistMove,
     flipMove,
@@ -357,22 +195,30 @@ function buildTwoPhaseTables(): void {
     cpermMove,
     uedgeMove,
     spermMove,
-    prune1Twist: buildPrune(N_SLICE, N_TWIST, sliceMove, twistMove, ALL_MOVES, sliceGoal, 0),
-    prune1Flip: buildPrune(N_SLICE, N_FLIP, sliceMove, flipMove, ALL_MOVES, sliceGoal, 0),
+    edge4Move,
+    prune1Twist: buildPrune(N_SLICE, N_TWIST, sliceMove, twistMove, ALL_MOVES, SLICE_GOAL, 0),
+    prune1Flip: buildPrune(N_SLICE, N_FLIP, sliceMove, flipMove, ALL_MOVES, SLICE_GOAL, 0),
     prune1TwistFlip: buildPrune(N_TWIST, N_FLIP, twistMove, flipMove, ALL_MOVES, 0, 0),
     prune2Corner: buildPrune(N_PERM4, N_PERM8, spermMove, cpermMove, PHASE2_MOVES, 0, 0),
     prune2Edge: buildPrune(N_PERM4, N_PERM8, spermMove, uedgeMove, PHASE2_MOVES, 0, 0),
   }
 }
 
+function subsetMove(k: number): Uint16Array {
+  return buildMoveTable(new Uint16Array(12 ** k * N_MOVES), 12 ** k, ALL_MOVES, (code, m) => {
+    let out = 0
+    let place = 1
+    for (let i = 0; i < k; i++) {
+      out += SLOT_AFTER[m][((code / place) | 0) % 12] * place
+      place *= 12
+    }
+    return out
+  })
+}
+
 export function isTwoPhaseReady(): boolean {
   return tables !== null
 }
-
-// Edges grouped for the optimal search's lower bounds.
-const EDGES_A = [UR, UF, UL]
-const EDGES_B = [UB, DR, DF]
-const SLICE_EDGES = [FR, FL, BL, BR]
 
 /**
  * The optimal search's extra tables. Only the worker that answers Solve needs
@@ -384,31 +230,29 @@ export function initProofTables(): void {
 }
 
 function buildProofTables(): void {
-  const subsetMove = (k: number) =>
-    buildMoveTable(new Uint16Array(12 ** k * N_MOVES), 12 ** k, ALL_MOVES, (code, m) => {
-      let out = 0
-      let place = 1
-      for (let i = 0; i < k; i++) {
-        out += SLOT_AFTER[m][((code / place) | 0) % 12] * place
-        place *= 12
-      }
-      return out
-    })
-  const cpermMove = buildMoveTable(new Uint16Array(N_PERM8 * N_MOVES), N_PERM8, ALL_MOVES, (r, m) => {
-    const cp = permUnrank(r, 8)
-    return permRank(cp.map((_, c) => cp[MOVES[m].cp[c]]), 8)
-  })
+  const t = tables!
   const edge3Move = subsetMove(3)
-  const edge4Move = subsetMove(4)
   proofTables = {
-    cpermMove,
     edge3Move,
-    edge4Move,
-    pruneCorners: buildPrune1(N_PERM8, cpermMove, 0),
+    pruneCorners: buildPrune1(N_PERM8, t.cpermMove, 0),
     pruneEdges6: buildPrune(N_EDGE3, N_EDGE3, edge3Move, edge3Move, ALL_MOVES, edgeSlotsOf(SOLVED.ep, EDGES_A), edgeSlotsOf(SOLVED.ep, EDGES_B)),
-    pruneSlice: buildPrune1(N_EDGE4, edge4Move, edgeSlotsOf(SOLVED.ep, SLICE_EDGES)),
+    pruneSlice: buildPrune1(N_EDGE4, t.edge4Move, edgeSlotsOf(SOLVED.ep, SLICE_EDGES)),
   }
 }
+
+/** What the tables cost: bytes held, by table, for the research report. */
+export function tableBytes(): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const [name, value] of Object.entries({ ...tables, ...proofTables })) out[name] = (value as ArrayBufferView).byteLength
+  const p1 = getPhase1Table()
+  if (p1) for (const [name, value] of Object.entries(p1)) out[`phase1.${name}`] = (value as ArrayBufferView).byteLength
+  const m = phase1Moves()
+  out.twistMove = m.twistMove.byteLength
+  out.flipMove = m.flipMove.byteLength
+  out.sliceMove = m.sliceMove.byteLength
+  return out
+}
+export { phase1TableBuildMs, N_PHASE1 }
 
 // ---- Moves as text -------------------------------------------------------
 const moveName = (m: number) => FACE_LETTERS[(m / 3) | 0] + ['', '2', "'"][m % 3]
@@ -450,7 +294,7 @@ function viewsOf(moves: number[]): View[] {
     for (let turns = 0; turns < 3; turns++) {
       const t = turns
       views.push({
-        start: seen.reduce((s, m) => multiply(s, MOVES[m]), SOLVED),
+        start: applyMoves(SOLVED, seen),
         toReal: (path) => {
           let real = path
           for (let i = 0; i < t; i++) real = real.map((m) => relabelMove(m, CORNER_TURN_BACK))
@@ -463,6 +307,14 @@ function viewsOf(moves: number[]): View[] {
   return views
 }
 
+/** Cost of the cheapest route that is still worth finding: under `bound`, and of the right parity. */
+function lastUsefulCost(bound: number, parity: number): number {
+  if (bound === Infinity) return Infinity
+  let lim = bound - 1
+  if (((lim - parity) & 1) !== 0) lim--
+  return lim
+}
+
 // ---- Improving search ------------------------------------------------------
 const STACK = 64
 const MAX_THRESHOLD = 40
@@ -471,6 +323,8 @@ interface Root {
   tw: number
   fl: number
   sl: number
+  /** Lower bound on the phase-1 cost (exact when the exact table is in use). */
+  h: number
 }
 
 /**
@@ -485,13 +339,13 @@ interface Root {
  * you move.
  *
  * Phase 1 is pruned by the cost to reach G1 against the current level (the
- * usual IDA* rule), using the three phase-1 tables. A second rule, a whole-cube
- * lower bound against the best total so far, was tried and measured to gain
- * nothing at these depths, so it was removed; that also means this search
- * needs no proof tables, which keeps helper workers light.
+ * usual IDA* rule): the exact cost if the exact table was ready when the job
+ * was made, else the largest of three smaller tables. Phase 2's coordinates
+ * are only needed where phase 1 ends, so they are read off the actual cube at
+ * that point rather than carried for every node.
  *
- * If every level below the best cost is exhausted, nothing cheaper exists:
- * the best solution is provably optimal (`exhausted`).
+ * If every useful level below the best cost is exhausted, nothing cheaper
+ * exists: the best solution is provably optimal (`exhausted`).
  */
 export class RefineJob {
   /** Cheapest solution so far, as move numbers (see moveName), or null. */
@@ -507,11 +361,18 @@ export class RefineJob {
    * `cost`: only strictly cheaper ones are worth looking for now.
    */
   tighten(cost: number): void {
-    if (cost < this.bestCost) this.bestCost = cost
+    if (cost < this.bestCost) {
+      this.bestCost = cost
+      this.useful = lastUsefulCost(cost, this.parity)
+    }
   }
 
   private readonly views: View[]
   private readonly roots: Root[]
+  private readonly exact: Phase1Table | null
+  /** Every solution of this cube costs an even (0) or odd (1) number of quarter turns. */
+  private readonly parity: number
+  private useful: number
   private threshold = 0
   private viewIndex = 0
   private active = false
@@ -520,55 +381,65 @@ export class RefineJob {
   private readonly tw = new Int32Array(STACK)
   private readonly fl = new Int32Array(STACK)
   private readonly sl = new Int32Array(STACK)
+  private readonly h = new Int32Array(STACK)
+  private readonly chain = new Int32Array(STACK) // phase-1 cost after the last sibling turn of the same face
   private readonly spent = new Int32Array(STACK)
   private readonly last = new Int32Array(STACK)
   private readonly next = new Int32Array(STACK)
   private readonly fresh = new Uint8Array(STACK)
   private readonly taken = new Int32Array(STACK) // the move made from each depth
-  private tail: number[] = [] // phase-2 moves under construction
+  private readonly tail = new Int32Array(STACK) // phase-2 moves under construction
+  private tailLength = 0
 
   /** `bound`: only solutions costing strictly less than this are wanted. */
   constructor(views: View[], bound = Infinity) {
     initTwoPhase()
+    const t = tables!
     this.views = views
     this.bestCost = bound
-    this.roots = views.map((v) => ({
-      tw: twistOf(v.start.co),
-      fl: flipOf(v.start.eo),
-      sl: slicePositionOf(v.start.ep),
-    }))
+    this.exact = getPhase1Table()
+    this.parity = parityOf(views[0].start.cp)
+    this.useful = lastUsefulCost(bound, this.parity)
+    this.roots = views.map((v) => {
+      const tw = twistOf(v.start.co)
+      const fl = flipOf(v.start.eo)
+      const sl = slicePositionOf(v.start.ep)
+      return { tw, fl, sl, h: this.exact ? phase1Cost(this.exact, tw, fl, sl) : smallPhase1Bound(t, tw, fl, sl) }
+    })
   }
 
   /** Advance for about `budgetMs`. Returns true once the search is finished. */
   run(budgetMs: number): boolean {
     const t = tables!
+    const ex = this.exact
+    const cost3 = ex?.cost3
+    const fsClass = ex?.fsClass
+    const fsSym = ex?.fsSym
+    const twistConj = ex?.twistConj
     const deadline = performance.now() + budgetMs
     let nodes = 0
     for (;;) {
       if (this.exhausted) return true
       if (!this.active) {
-        if (this.threshold >= this.bestCost || this.threshold > MAX_THRESHOLD) {
+        if (this.threshold > this.useful || this.threshold > MAX_THRESHOLD) {
           this.exhausted = true
           return true
         }
         this.begin()
       }
+      const threshold = this.threshold
       while (this.depth >= 0) {
         if ((++nodes & 1023) === 0 && performance.now() > deadline) return false
         const d = this.depth
         if (this.fresh[d]) {
           this.fresh[d] = 0
           const spent = this.spent[d]
-          const g1 = Math.max(
-            t.prune1Twist[this.sl[d] * N_TWIST + this.tw[d]],
-            t.prune1Flip[this.sl[d] * N_FLIP + this.fl[d]],
-            t.prune1TwistFlip[this.tw[d] * N_FLIP + this.fl[d]],
-          )
-          if (spent + g1 > this.threshold) {
+          const g1 = this.h[d]
+          if (spent + g1 > threshold) {
             this.depth--
             continue
           }
-          if (g1 === 0 && spent === this.threshold) {
+          if (g1 === 0 && spent === threshold) {
             // Ending on a phase-2 move would just be a cheaper phase 1 plus that move.
             if (this.last[d] < 0 || !isPhase2Move(this.last[d])) this.leaf(d)
             this.depth--
@@ -578,18 +449,38 @@ export class RefineJob {
         }
         const row = (this.last[d] + 1) * N_MOVES
         let m = this.next[d]
-        while (m < N_MOVES && !ALLOWED[row + m]) m++
+        while (m < N_MOVES && !ALLOWED[row + m]) m += 3
         if (m >= N_MOVES) {
           this.depth--
           continue
         }
         this.next[d] = m + 1
+        const tw = t.twistMove[this.tw[d] * N_MOVES + m]
+        const fl = t.flipMove[this.fl[d] * N_MOVES + m]
+        const sl = t.sliceMove[this.sl[d] * N_MOVES + m]
+        let hc: number
+        if (ex) {
+          // Exact cost from the cost one quarter turn back: R from the cube, R2
+          // from R, R' from R2 (the turns of a face come in that order).
+          const fs = sl * N_FLIP + fl
+          const i = fsClass![fs] * N_TWIST + twistConj![tw * N_SYM_UD + fsSym![fs]]
+          const after = (cost3![i >>> 4] >>> ((i & 15) << 1)) & 3
+          const before = m % 3 === 0 ? this.h[d] : this.chain[d]
+          const delta = (after - before + 3) % 3
+          hc = delta === 0 ? before : delta === 1 ? before + 1 : before - 1
+          this.chain[d] = hc
+        } else {
+          hc = smallPhase1Bound(t, tw, fl, sl)
+        }
+        const spent = this.spent[d] + (m % 3 === 1 ? 2 : 1)
+        if (spent + hc > threshold) continue
         const c = d + 1
         this.taken[d] = m
-        this.tw[c] = t.twistMove[this.tw[d] * N_MOVES + m]
-        this.fl[c] = t.flipMove[this.fl[d] * N_MOVES + m]
-        this.sl[c] = t.sliceMove[this.sl[d] * N_MOVES + m]
-        this.spent[c] = this.spent[d] + quarterCost(m)
+        this.tw[c] = tw
+        this.fl[c] = fl
+        this.sl[c] = sl
+        this.h[c] = hc
+        this.spent[c] = spent
         this.last[c] = m
         this.fresh[c] = 1
         this.depth = c
@@ -609,6 +500,7 @@ export class RefineJob {
     this.tw[0] = r.tw
     this.fl[0] = r.fl
     this.sl[0] = r.sl
+    this.h[0] = r.h
     this.spent[0] = 0
     this.last[0] = -1
     this.fresh[0] = 1
@@ -629,46 +521,49 @@ export class RefineJob {
     const last = d > 0 ? head[d - 1] : -1
     const floor = Math.max(t.prune2Corner[sp * N_PERM8 + cp], t.prune2Edge[sp * N_PERM8 + ue])
     if (base + floor >= this.bestCost) return
-    this.tail = []
+    this.tailLength = 0
     if (this.bestCost === Infinity) {
       // No solution yet: any one will do, so deepen phase 2 until one appears.
-      for (let limit = floor; !this.phase2First(head, cp, ue, sp, 0, limit, last, base); limit++);
+      for (let limit = floor; !this.phase2First(d, cp, ue, sp, 0, limit, last); limit++);
     } else {
-      this.phase2Better(head, cp, ue, sp, 0, last, base)
+      this.phase2Better(d, cp, ue, sp, 0, last)
     }
   }
 
-  private record(head: number[], cost: number): void {
-    const real = this.views[this.viewIndex].toReal([...head, ...this.tail])
+  private record(d: number, cost: number): void {
+    const path = [...this.taken.subarray(0, d), ...this.tail.subarray(0, this.tailLength)]
+    const real = this.views[this.viewIndex].toReal(path)
     this.best = real
     this.bestCost = cost
+    this.useful = lastUsefulCost(cost, this.parity)
     this.onImprove?.(real, cost)
   }
 
   // Phase 2 for the first solution: iterative deepening, since there is no bound yet.
-  private phase2First(head: number[], cp: number, ue: number, sp: number, spent: number, limit: number, last: number, base: number): boolean {
+  private phase2First(d: number, cp: number, ue: number, sp: number, spent: number, limit: number, last: number): boolean {
     const t = tables!
-    const h = Math.max(t.prune2Corner[sp * N_PERM8 + cp], t.prune2Edge[sp * N_PERM8 + ue])
+    const a = t.prune2Corner[sp * N_PERM8 + cp]
+    const b = t.prune2Edge[sp * N_PERM8 + ue]
+    const h = a > b ? a : b
     if (spent + h > limit) return false
     if (h === 0) {
-      this.record(head, base + spent)
+      this.record(d, this.spent[d] + spent)
       return true
     }
     const row = (last + 1) * N_MOVES
     for (const m of PHASE2_MOVES) {
       if (!ALLOWED[row + m]) continue
-      this.tail.push(m)
+      this.tail[this.tailLength++] = m
       const found = this.phase2First(
-        head,
+        d,
         t.cpermMove[cp * N_MOVES + m],
         t.uedgeMove[ue * N_MOVES + m],
         t.spermMove[sp * N_MOVES + m],
         spent + quarterCost(m),
         limit,
         m,
-        base,
       )
-      this.tail.pop()
+      this.tailLength--
       if (found) return true
     }
     return false
@@ -676,22 +571,33 @@ export class RefineJob {
 
   // Phase 2 once a solution exists: one pass bounded by the best total so far,
   // which tightens each time something better is recorded.
-  private phase2Better(head: number[], cp: number, ue: number, sp: number, spent: number, last: number, base: number): void {
+  private phase2Better(d: number, cp: number, ue: number, sp: number, spent: number, last: number): void {
     const t = tables!
-    const h = Math.max(t.prune2Corner[sp * N_PERM8 + cp], t.prune2Edge[sp * N_PERM8 + ue])
+    const a = t.prune2Corner[sp * N_PERM8 + cp]
+    const b = t.prune2Edge[sp * N_PERM8 + ue]
+    const h = a > b ? a : b
+    const base = this.spent[d]
     if (base + spent + h >= this.bestCost) return
     if (h === 0) {
-      this.record(head, base + spent)
+      this.record(d, base + spent)
       return
     }
     const row = (last + 1) * N_MOVES
     for (const m of PHASE2_MOVES) {
       if (!ALLOWED[row + m]) continue
-      this.tail.push(m)
-      this.phase2Better(head, t.cpermMove[cp * N_MOVES + m], t.uedgeMove[ue * N_MOVES + m], t.spermMove[sp * N_MOVES + m], spent + quarterCost(m), m, base)
-      this.tail.pop()
+      this.tail[this.tailLength++] = m
+      this.phase2Better(d, t.cpermMove[cp * N_MOVES + m], t.uedgeMove[ue * N_MOVES + m], t.spermMove[sp * N_MOVES + m], spent + quarterCost(m), m)
+      this.tailLength--
     }
   }
+}
+
+/** The largest of the three small phase-1 tables: a lower bound on the phase-1 cost. */
+function smallPhase1Bound(t: Tables, tw: number, fl: number, sl: number): number {
+  const a = t.prune1Twist[sl * N_TWIST + tw]
+  const b = t.prune1Flip[sl * N_FLIP + fl]
+  const c = t.prune1TwistFlip[tw * N_FLIP + fl]
+  return a > b ? (a > c ? a : c) : b > c ? b : c
 }
 
 /** Runs a job until it has a first solution, then for up to `extraMs` more. */
@@ -712,78 +618,134 @@ interface ProofResult {
   noneBelow: number
 }
 
+// AXIS_MOVE[a * 18 + m]: move m as the cube seen along axis a sees it.
+const AXIS_MOVE = new Int8Array(3 * N_MOVES)
+for (let a = 0; a < 3; a++) for (let m = 0; m < N_MOVES; m++) AXIS_MOVE[a * N_MOVES + m] = CONJ_MOVE[m * N_SYM + AXIS_SYM[a]]
+
 /**
  * IDA* over the whole cube, trying costs from `from` up to (not including)
  * `below`. Every lower bound it uses is exact for part of the cube, so it never
  * over-estimates and the first solution found is the cheapest one there is.
+ *
+ * Its main bound is the phase-1 cost seen along each of the three axes: the
+ * cube, and the cube turned so that its R-L axis, then its F-B axis, is
+ * vertical. Each is the cost of reaching a subgroup that the solved cube is in,
+ * so each is a lower bound, and so is the largest. Costs are rounded up to the
+ * parity every solution of the cube has, and only levels of that parity are
+ * searched.
  */
 function proveOptimal(start: Cubie, below: number, from: number, timeMs: number): ProofResult {
   initProofTables()
   const t = tables!
   const p = proofTables!
+  const ex = getPhase1Table()
   const deadline = performance.now() + timeMs
   let nodes = 0
   let timeUp = false
   const path: number[] = []
+  const parity = parityOf(start.cp)
 
-  const bound = (tw: number, fl: number, sl: number, cp: number, ea: number, eb: number, s4: number) =>
-    Math.max(
-      t.prune1Twist[sl * N_TWIST + tw],
-      t.prune1Flip[sl * N_FLIP + fl],
-      t.prune1TwistFlip[tw * N_FLIP + fl],
-      p.pruneCorners[cp],
-      p.pruneEdges6[ea * N_EDGE3 + eb],
-      p.pruneSlice[s4],
-    )
+  const MAXD = STACK
+  const tw = new Int32Array(MAXD * 3)
+  const fl = new Int32Array(MAXD * 3)
+  const sl = new Int32Array(MAXD * 3)
+  const h1 = new Int32Array(MAXD * 3)
+  const chain = new Int32Array(MAXD * 3)
+  const cp = new Int32Array(MAXD)
+  const ea = new Int32Array(MAXD)
+  const eb = new Int32Array(MAXD)
+  const s4 = new Int32Array(MAXD)
+
+  for (let a = 0; a < 3; a++) {
+    const seen = conjugate(start, AXIS_SYM[a])
+    tw[a] = twistOf(seen.co)
+    fl[a] = flipOf(seen.eo)
+    sl[a] = slicePositionOf(seen.ep)
+    h1[a] = ex ? phase1Cost(ex, tw[a], fl[a], sl[a]) : smallPhase1Bound(t, tw[a], fl[a], sl[a])
+  }
+  cp[0] = permRank(start.cp, 8)
+  ea[0] = edgeSlotsOf(start.ep, EDGES_A)
+  eb[0] = edgeSlotsOf(start.ep, EDGES_B)
+  s4[0] = edgeSlotsOf(start.ep, SLICE_EDGES)
+  const others = (k: number) => {
+    const c = p.pruneCorners[cp[k]]
+    const e = p.pruneEdges6[ea[k] * N_EDGE3 + eb[k]]
+    const s = p.pruneSlice[s4[k]]
+    return c > e ? (c > s ? c : s) : e > s ? e : s
+  }
+  // Round a lower bound on the cost from here up to the parity it must have.
+  const withParity = (bound: number, spent: number) => bound + ((bound + spent + parity) & 1)
 
   let threshold = 0
   // When every bound is 0 the cube is solved: twist, flip, all corner places,
   // and ten edge places are right, which leaves the last two edges no choice
   // (swapping only them would break the parity that the corners pin down).
-  function dfs(tw: number, fl: number, sl: number, cp: number, ea: number, eb: number, s4: number, spent: number, last: number): boolean {
+  function dfs(k: number, spent: number, last: number): boolean {
     if ((++nodes & 2047) === 0 && performance.now() > deadline) timeUp = true
     if (timeUp) return false
-    const h = bound(tw, fl, sl, cp, ea, eb, s4)
-    if (spent + h > threshold) return false
-    if (h === 0) return true
     const row = (last + 1) * N_MOVES
+    const c = k + 1
     for (let m = 0; m < N_MOVES; m++) {
-      if (!ALLOWED[row + m]) continue
+      if (!ALLOWED[row + m]) {
+        m += 2 // the three turns of a face are allowed or not together
+        continue
+      }
+      let h = 0
+      for (let a = 0; a < 3; a++) {
+        const ma = AXIS_MOVE[a * N_MOVES + m]
+        const j = k * 3 + a
+        const tw1 = t.twistMove[tw[j] * N_MOVES + ma]
+        const fl1 = t.flipMove[fl[j] * N_MOVES + ma]
+        const sl1 = t.sliceMove[sl[j] * N_MOVES + ma]
+        let ha: number
+        if (ex) {
+          const fs = sl1 * N_FLIP + fl1
+          const i = ex.fsClass[fs] * N_TWIST + ex.twistConj[tw1 * N_SYM_UD + ex.fsSym[fs]]
+          const after = (ex.cost3[i >>> 4] >>> ((i & 15) << 1)) & 3
+          const before = m % 3 === 0 ? h1[j] : chain[j]
+          const delta = (after - before + 3) % 3
+          ha = delta === 0 ? before : delta === 1 ? before + 1 : before - 1
+          chain[j] = ha
+        } else {
+          ha = smallPhase1Bound(t, tw1, fl1, sl1)
+        }
+        const jc = c * 3 + a
+        tw[jc] = tw1
+        fl[jc] = fl1
+        sl[jc] = sl1
+        h1[jc] = ha
+        if (ha > h) h = ha
+      }
+      cp[c] = t.cpermMove[cp[k] * N_MOVES + m]
+      ea[c] = p.edge3Move[ea[k] * N_MOVES + m]
+      eb[c] = p.edge3Move[eb[k] * N_MOVES + m]
+      s4[c] = t.edge4Move[s4[k] * N_MOVES + m]
+      const o = others(c)
+      if (o > h) h = o
+      const sc = spent + quarterCost(m)
+      h = withParity(h, sc)
+      if (sc + h > threshold) continue
       path.push(m)
-      if (
-        dfs(
-          t.twistMove[tw * N_MOVES + m],
-          t.flipMove[fl * N_MOVES + m],
-          t.sliceMove[sl * N_MOVES + m],
-          p.cpermMove[cp * N_MOVES + m],
-          p.edge3Move[ea * N_MOVES + m],
-          p.edge3Move[eb * N_MOVES + m],
-          p.edge4Move[s4 * N_MOVES + m],
-          spent + quarterCost(m),
-          m,
-        )
-      )
-        return true
+      if (h === 0 || dfs(c, sc, m)) return true
       path.pop()
+      if (timeUp) return false
     }
     return false
   }
 
-  const tw = twistOf(start.co)
-  const fl = flipOf(start.eo)
-  const sl = slicePositionOf(start.ep)
-  const cp = permRank(start.cp, 8)
-  const ea = edgeSlotsOf(start.ep, EDGES_A)
-  const eb = edgeSlotsOf(start.ep, EDGES_B)
-  const s4 = edgeSlotsOf(start.ep, SLICE_EDGES)
-  const floor = Math.max(from, bound(tw, fl, sl, cp, ea, eb, s4))
-
-  for (threshold = floor; threshold < below; threshold++) {
+  let root = others(0)
+  for (let a = 0; a < 3; a++) if (h1[a] > root) root = h1[a]
+  if (root === 0) return { path: [], noneBelow: 0 }
+  // `from` is a proven lower bound; so is the root's estimate. Solutions all
+  // have the cube's parity, so the first level worth searching has it too.
+  const floor = withParity(Math.max(from, root), 0)
+  for (threshold = floor; threshold < below; threshold += 2) {
     path.length = 0
-    if (dfs(tw, fl, sl, cp, ea, eb, s4, 0, -1)) return { path: path.slice(), noneBelow: costOf(path) }
+    if (dfs(0, 0, -1)) return { path: path.slice(), noneBelow: costOf(path) }
     if (timeUp) return { path: null, noneBelow: threshold }
   }
-  return { path: null, noneBelow: Math.max(below, floor) }
+  // Every level of the right parity below `threshold` is empty.
+  return { path: null, noneBelow: threshold }
 }
 
 // ---- Public API ----------------------------------------------------------
@@ -813,7 +775,7 @@ export interface SolveResult {
 export function solveDetailed(scramble: string, options: SolveOptions = {}): SolveResult {
   initTwoPhase()
   const moves = movesOf(scramble)
-  const start = moves.reduce((s, m) => multiply(s, MOVES[m]), SOLVED)
+  const start = applyMoves(SOLVED, moves)
   if (isSolvedCubie(start)) return { solution: '', cost: 0, noneBelow: 0 }
   const proveMs = options.proveMs ?? 600
   const outside = options.bound ?? Infinity
@@ -838,7 +800,7 @@ export function solveDetailed(scramble: string, options: SolveOptions = {}): Sol
   const below = Math.min(costOf(best), outside)
   const proof = proveOptimal(start, below, quick.noneBelow, Math.max(0, proveMs - 150))
   if (proof.path) return done(proof.path, proof.noneBelow)
-  return done(best, proof.noneBelow)
+  return done(best, Math.min(proof.noneBelow, costOf(best)))
 }
 
 /**
@@ -848,7 +810,7 @@ export function solveDetailed(scramble: string, options: SolveOptions = {}): Sol
 export function solveTwoPhase(scramble: string, options: { timeMs?: number } = {}): string {
   initTwoPhase()
   const moves = movesOf(scramble)
-  if (isSolvedCubie(moves.reduce((s, m) => multiply(s, MOVES[m]), SOLVED))) return ''
+  if (isSolvedCubie(applyMoves(SOLVED, moves))) return ''
   const job = new RefineJob(viewsOf(moves))
   runJob(job, options.timeMs ?? 1500)
   return job.best!.map(moveName).join(' ')
@@ -886,12 +848,6 @@ function randomPermutation(n: number, below: (n: number) => number): number[] {
     ;[p[i], p[j]] = [p[j], p[i]]
   }
   return p
-}
-
-const parityOf = (p: number[]) => {
-  let swaps = 0
-  for (let i = 0; i < p.length; i++) for (let j = i + 1; j < p.length; j++) if (p[j] < p[i]) swaps++
-  return swaps % 2
 }
 
 /**
@@ -940,7 +896,9 @@ export function randomScramble(): string {
  */
 export function scrambleFor(target: Cubie, timeMs = 250): string {
   initTwoPhase()
+  if (isSolvedCubie(target)) return ''
   const job = new RefineJob([{ start: target, toReal: (p) => p }])
   runJob(job, timeMs)
   return invertPath(job.best!).map(moveName).join(' ')
 }
+
