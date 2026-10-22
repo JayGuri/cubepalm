@@ -104,103 +104,113 @@ main[tabindex='-1']:focus {
    utility such as md:hidden on one of these still wins. ---- */
 @layer components {
 
-/* The header's six places: stickers on a strip of black plastic. The face you
-   are on is lit; the others sit in shadow, and come up a little when reached for. */
+/* The header's six places: six full-colour stickers, the cube's own colours. They
+   lean toward you and lift when reached for, and the face you are on is ringed. */
 .face-row {
   display: flex;
-  gap: 4px;
-  padding: 4px;
-  border-radius: 12px;
-  background: var(--color-plastic);
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.05),
-    0 1px 0 rgb(0 0 0 / 0.35);
+  gap: 8px;
+  align-items: center;
 }
 .face-tab {
   display: grid;
   place-items: center;
-  min-width: 3.6rem;
-  min-height: 2.25rem;
-  padding-inline: 0.65rem;
-  border-radius: 8px;
-  font-size: 0.875rem;
-  font-weight: 700;
+  min-width: 4.4rem;
+  min-height: 2.5rem;
+  padding-inline: 1rem;
+  border-radius: 12px;
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 800;
   line-height: 1;
+  letter-spacing: -0.01em;
   white-space: nowrap;
-  color: var(--color-fg-muted);
-  background: color-mix(in srgb, var(--face) 13%, #121317);
+  color: #10131a;
+  background: var(--face);
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.05),
-    inset 0 -2px 0 rgb(0 0 0 / 0.3);
+    inset 0 1px 0 rgb(255 255 255 / 0.4),
+    inset 0 -4px 0 rgb(0 0 0 / 0.2),
+    0 6px 14px -8px var(--face);
+  transform: perspective(500px);
   transition:
-    background-color 180ms,
-    color 180ms,
-    box-shadow 180ms,
-    translate 260ms var(--ease-click);
+    transform 320ms var(--ease-click),
+    box-shadow 220ms;
 }
 @media (pointer: coarse) {
   .face-tab {
     min-height: 2.75rem;
   }
 }
-.face-tab:hover {
-  color: var(--color-fg);
-  background: color-mix(in srgb, var(--face) 26%, #121317);
+.face-tab:hover,
+.face-tab:focus-visible {
+  transform: perspective(500px) translateY(-4px) rotateX(10deg) rotate(-2deg) scale(1.05);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.5),
+    inset 0 -4px 0 rgb(0 0 0 / 0.2),
+    0 16px 22px -10px var(--face);
+}
+.face-row > li:nth-child(even) .face-tab:hover,
+.face-row > li:nth-child(even) .face-tab:focus-visible {
+  transform: perspective(500px) translateY(-4px) rotateX(10deg) rotate(2deg) scale(1.05);
 }
 .face-tab[aria-current='page'] {
-  color: var(--color-plastic);
-  background: var(--face);
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.28),
-    inset 0 -3px 0 rgb(0 0 0 / 0.18);
+    inset 0 1px 0 rgb(255 255 255 / 0.4),
+    inset 0 -4px 0 rgb(0 0 0 / 0.2),
+    0 0 0 2px #16171b,
+    0 0 0 4px #f4f5f8;
 }
 /* Pressed in: the sticker sinks and its lip all but goes. */
 .face-tab:active {
-  translate: 0 1px;
+  transform: perspective(500px) translateY(1px) scale(0.98);
   box-shadow: inset 0 -1px 0 rgb(0 0 0 / 0.3);
   transition-duration: 60ms;
 }
 
-/* The menu button: a face of nine stickers on a square of plastic. */
+/* The menu button: a face of nine stickers in the cube's six colours, on black plastic. */
 .menu-button {
   display: grid;
   place-items: center;
   flex-shrink: 0;
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: 10px;
-  color: var(--color-fg-muted);
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 12px;
   background: var(--color-plastic);
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.06),
+    inset 0 1px 0 rgb(255 255 255 / 0.08),
     0 1px 0 rgb(0 0 0 / 0.35);
-  transition:
-    color 160ms,
-    translate 240ms var(--ease-click);
+  transition: transform 260ms var(--ease-click);
 }
 @media (pointer: coarse) {
   .menu-button {
-    width: 2.75rem;
-    height: 2.75rem;
+    width: 3rem;
+    height: 3rem;
   }
 }
 .menu-button:hover {
-  color: var(--color-fg);
+  transform: translateY(-2px) rotate(-3deg) scale(1.06);
 }
 .menu-button:active {
-  translate: 0 1px;
+  transform: translateY(1px) scale(0.97);
 }
 .menu-glyph {
   display: grid;
-  grid-template-columns: repeat(3, 6px);
+  grid-template-columns: repeat(3, 7px);
   gap: 2px;
 }
 .menu-glyph > span {
-  width: 6px;
-  height: 6px;
-  border-radius: 1.5px;
-  background: currentColor;
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: var(--color-sticker-orange);
 }
+.menu-glyph > span:nth-child(2) { background: var(--color-sticker-white); }
+.menu-glyph > span:nth-child(3) { background: var(--color-sticker-green); }
+.menu-glyph > span:nth-child(4) { background: var(--color-sticker-blue); }
+.menu-glyph > span:nth-child(5) { background: var(--color-sticker-yellow); }
+.menu-glyph > span:nth-child(6) { background: var(--color-sticker-red); }
+.menu-glyph > span:nth-child(7) { background: var(--color-sticker-green); }
+.menu-glyph > span:nth-child(8) { background: var(--color-sticker-orange); }
+.menu-glyph > span:nth-child(9) { background: var(--color-sticker-blue); }
 
 /* What it opens: the cube unfolded on a darkened table. */
 .site-menu {

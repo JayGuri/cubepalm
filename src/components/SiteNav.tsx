@@ -14,7 +14,7 @@ export function SiteNav({ size = 44 }: { size?: number }) {
   return (
     <nav aria-label="Main" className="flex items-center justify-between gap-4">
       <Logo size={size} />
-      <ul className="face-row max-md:hidden">
+      <ul className="face-row max-lg:hidden">
         {PLACES.map((p) => {
           const style = { '--face': p.colour } as CSSProperties
           return (
@@ -33,7 +33,7 @@ export function SiteNav({ size = 44 }: { size?: number }) {
           )
         })}
       </ul>
-      <SiteMenu className="md:hidden" />
+      <SiteMenu className="lg:hidden" />
     </nav>
   )
 }
@@ -41,9 +41,9 @@ export function SiteNav({ size = 44 }: { size?: number }) {
 /** The six colours as a strip of stickers: a cube's edge. */
 export function ColourStrip() {
   return (
-    <div aria-hidden className="grid grid-cols-6 gap-1 rounded-md bg-plastic p-1">
+    <div aria-hidden className="grid grid-cols-6 gap-2">
       {PLACES.map((p) => (
-        <span key={p.label} className="sticker h-2 rounded-[3px]" style={{ background: p.colour }} />
+        <span key={p.label} className="sticker h-3 rounded-full transition duration-300 hover:-translate-y-1 hover:scale-y-125" style={{ background: p.colour }} />
       ))}
     </div>
   )

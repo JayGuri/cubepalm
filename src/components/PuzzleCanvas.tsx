@@ -95,13 +95,14 @@ function bodyMaterial(): THREE.MeshStandardMaterial {
   return cubieBody
 }
 
-// The Mirror Cube is brushed aluminium on a black core. Each piece gets its own
-// tile material (shared by its three tiles) so it can fade out of focus alone.
-const MIRROR_SILVER = new THREE.Color('#CFD3DA')
+// The Mirror Cube is brushed blue metal on a black core: blue, not grey, so it
+// stands out from the black page. Each piece gets its own tile material (shared
+// by its three tiles) so it can fade out of focus alone.
+const MIRROR_BLUE = new THREE.Color('#8FB4FF')
 let mirrorCore: THREE.MeshStandardMaterial | null = null
-const mirrorBody = () => (mirrorCore ??= new THREE.MeshStandardMaterial({ color: '#0E0F13', roughness: 0.6 }))
+const mirrorBody = () => (mirrorCore ??= new THREE.MeshStandardMaterial({ color: '#14161F', roughness: 0.85 }))
 const newMirrorTile = () =>
-  new THREE.MeshStandardMaterial({ color: MIRROR_SILVER, map: brushedTexture(), metalness: 1, roughness: 0.32, envMapIntensity: 1.15 })
+  new THREE.MeshStandardMaterial({ color: MIRROR_BLUE, map: brushedTexture(), metalness: 0.9, roughness: 0.22, envMapIntensity: 1.25 })
 
 let brushed: THREE.CanvasTexture | null = null
 // Fine light and dark streaks, all running one way: brushed metal. Mipmapped and
@@ -309,7 +310,7 @@ function Pieces({
     const keys = isMirror ? [pieceId] : faceKeys.map((face) => `${pieceId}:${face}`)
     for (const key of keys) {
       const m = materials.current.get(key)
-      const base = isMirror ? MIRROR_SILVER : baseColor.current.get(key)
+      const base = isMirror ? MIRROR_BLUE : baseColor.current.get(key)
       if (m && base) m.color.copy(base).lerp(DIM_TOWARD, amount * DIM_STRENGTH)
     }
   }
@@ -800,8 +801,8 @@ function PuzzleCanvasInner({
             fill from the side, and the studio's softboxes reflected in the
             stickers' gloss and the plastic's edges. Metal takes almost all its
             look from the reflections, so the Mirror Cube gets less direct light. */}
-        <hemisphereLight args={['#FFFFFF', '#3A3D46', isMirror ? 0.5 : 1.5]} />
-        <directionalLight position={[4, 9, 6]} intensity={isMirror ? 1.6 : 1.5} />
+        <hemisphereLight args={['#FFFFFF', '#3A3D46', isMirror ? 0.85 : 1.5]} />
+        <directionalLight position={[4, 9, 6]} intensity={isMirror ? 2.1 : 1.5} />
         <directionalLight position={[-7, 2, -3]} intensity={isMirror ? 0.5 : 0.4} />
         {/* Baking the reflections costs a lot where the graphics are weak (seconds, in a browser
             with software rendering). Metal cannot do without them; a plastic cube looks nearly
