@@ -428,7 +428,7 @@ html[data-turn] ::view-transition-new(root) {
 .cc-plate {
   position: absolute;
   border-radius: 4px;
-  background: linear-gradient(135deg, #a9c4f7 0%, #5e8deb 45%, #27449a 100%);
+  background: linear-gradient(135deg, #8fd0ff 0%, #3f86ff 45%, #1f56d8 100%);
   box-shadow: inset 0 0 0 3px #0c0d10;
   backface-visibility: hidden;
 }

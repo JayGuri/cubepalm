@@ -33,7 +33,7 @@ function MirrorBlocks() {
       aria-hidden
     >
       {Array.from({ length: 9 }, (_, i) => (
-        <span key={i} className="rounded-md bg-linear-to-br from-[#A9C4F7] via-[#5E8DEB] to-[#27449A]" />
+        <span key={i} className="rounded-md bg-linear-to-br from-[#8FD0FF] via-[#3F86FF] to-[#1F56D8]" />
       ))}
     </div>
   )

@@ -95,14 +95,23 @@ function bodyMaterial(): THREE.MeshStandardMaterial {
   return cubieBody
 }
 
-// The Mirror Cube is brushed blue metal on a black core: blue, not grey, so it
-// stands out from the black page. Each piece gets its own tile material (shared
-// by its three tiles) so it can fade out of focus alone.
-const MIRROR_BLUE = new THREE.Color('#8FB4FF')
+// The Mirror Cube is bright azure blue, like the real one: a satin plastic with a
+// faint brushed grain, a soft glow of its own so it stays bright against the black
+// page, and pale frosted edges. Each piece gets its own tile material (shared by its
+// three tiles) so it can fade out of focus alone.
+const MIRROR_BLUE = new THREE.Color('#3F86FF')
 let mirrorCore: THREE.MeshStandardMaterial | null = null
-const mirrorBody = () => (mirrorCore ??= new THREE.MeshStandardMaterial({ color: '#14161F', roughness: 0.85 }))
+const mirrorBody = () => (mirrorCore ??= new THREE.MeshStandardMaterial({ color: '#4DA6F0', roughness: 0.5, metalness: 0.1 }))
 const newMirrorTile = () =>
-  new THREE.MeshStandardMaterial({ color: MIRROR_BLUE, map: brushedTexture(), metalness: 0.9, roughness: 0.22, envMapIntensity: 1.25 })
+  new THREE.MeshStandardMaterial({
+    color: MIRROR_BLUE,
+    map: brushedTexture(),
+    metalness: 0.3,
+    roughness: 0.3,
+    envMapIntensity: 1.1,
+    emissive: new THREE.Color('#1F5CE0'),
+    emissiveIntensity: 0.3,
+  })
 
 let brushed: THREE.CanvasTexture | null = null
 // Fine light and dark streaks, all running one way: brushed metal. Mipmapped and
