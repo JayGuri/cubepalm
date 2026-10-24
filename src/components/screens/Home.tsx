@@ -81,20 +81,20 @@ const FACTS = [
     body: 'MediaPipe finds 21 points on each hand, on your device. Four fingers, each up or down, make a sign, and the sign picks a layer.',
   },
   {
-    title: 'Measured signs',
-    body: 'Sign reading was tested on a posable hand model. That found a units error in the geometry: correcting it raised the signs read on the model from 75.4% to 89.9%.',
+    title: 'Tested on a model hand',
+    body: 'I tested sign reading on a posable hand model, and that turned up a units error in the geometry. Fixing it raised the signs read on the model from 75.4% to 89.9%. Real hands are not measured yet.',
   },
   {
-    title: 'A solver of its own',
-    body: 'A two-phase solver written for this project. Its first route arrives in about 29 ms, and it keeps looking: after five seconds, routes average 24.7 quarter turns.',
+    title: 'The solver',
+    body: 'I wrote a two-phase solver for this. The first route comes back in about 29 ms. It carries on searching, and after five seconds routes average 24.7 quarter turns.',
   },
   {
     title: 'Shape is the state',
     body: 'On the Mirror Cube every block’s position and rotation is tracked as a matrix, so the shape of the cube is the puzzle.',
   },
   {
-    title: 'Checked twice',
-    body: 'All 460 routes from the solver benchmark were replayed in cubing.js, a separate cube engine, and every one solved its cube.',
+    title: 'Checked in cubing.js',
+    body: 'I replayed all 460 routes from the solver benchmark in cubing.js, a separate cube engine. Every one solved its cube.',
   },
 ]
 
@@ -201,11 +201,11 @@ export function Home() {
         <section className="mt-20 grid gap-10 sm:mt-28 lg:grid-cols-[1fr_1.7fr] lg:gap-12" aria-labelledby="built-title">
           <div>
             <h2 id="built-title" className={H2}>
-              Built from scratch.
+              How it is built
             </h2>
             <p className="mt-4 max-w-sm text-pretty text-[#B2B0B9]">
-              CubePalm has no server. The tracking, the solver and the 3D all run in your browser. The numbers here come
-              from scripts in the repository that anyone can run again.
+              There is no server. Tracking, solver and 3D all run in your browser. Every number here comes from a script in
+              the repository, so you can run it yourself.
             </p>
             <div className="mt-4 flex flex-wrap gap-x-6 text-[0.95rem] font-semibold">
               <a href={`${GITHUB}/blob/main/docs/REPORT.md`} target="_blank" rel="noreferrer" className={`${LINK} text-[#ECEAE4]`}>

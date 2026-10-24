@@ -90,7 +90,7 @@ export function Scrambles() {
           <p className="mt-1 text-sm text-fg-muted">docs/research/scrambles.md drew 600,000 states (a fixed seed, so it is exactly reproducible) and ran nine such tests, including the two values the generator computes rather than draws.</p>
           <ul className="mt-3 grid gap-1.5 text-sm text-fg-muted">
             <li>
-              Corner in slot 0, {STUDY.n.toLocaleString()} draws: counts from {STUDY.lowest.toLocaleString()} to {STUDY.highest.toLocaleString()}, expected {STUDY.expected.toLocaleString()} — chi-square{' '}
+              Corner in slot 0, {STUDY.n.toLocaleString()} draws: counts from {STUDY.lowest.toLocaleString()} to {STUDY.highest.toLocaleString()}, expected {STUDY.expected.toLocaleString()}; chi-square{' '}
               <b className="text-fg">{STUDY.chiSquare}</b>, under the <b className="text-fg">{STUDY.critical}</b> bound.
             </li>
             <li>All nine tests, including the computed twist and flip, passed at the 99.9% level.</li>
@@ -100,7 +100,7 @@ export function Scrambles() {
             <Key kind="measured" /> docs/research/scrambles.md
           </p>
           <p className="mt-4 text-sm text-fg-muted">
-            A real scramble is drawn with the browser&apos;s cryptographic generator, not the seeded one used for this test, and is solved and played backwards — about 22 face
+            A real scramble is drawn with the browser&apos;s cryptographic generator, not the seeded one used for this test, and is solved and played backwards: about 22 face
             turns on average, never fewer than 16.
           </p>
         </div>
