@@ -76,6 +76,8 @@ export function PageTurns({ preload }: { preload: Preload }) {
       if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
       const a = (e.target as Element | null)?.closest?.('a[href][data-discover]')
       if (!(a instanceof HTMLAnchorElement) || (a.target && a.target !== '_self') || a.hasAttribute('download') || a.origin !== window.location.origin) return
+      // A face in the menu waits for the menu to fold shut; it clicks itself again afterwards.
+      if (a.closest('.site-menu') && !a.dataset.folded) return
       const { pathname, search } = window.location
       if (a.pathname === pathname && a.search === search) return
       if (!document.startViewTransition || prefersReducedMotion() || document.visibilityState !== 'visible') return

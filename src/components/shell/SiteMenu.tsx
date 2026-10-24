@@ -92,6 +92,8 @@ export function SiteMenu({ className = '' }: { className?: string }) {
   const closer = useRef<HTMLButtonElement>(null)
   const motion = useRef<Animation[]>([])
   const closing = useRef(false)
+  // What to do once the menu has folded shut: a face that was pressed, now to be visited.
+  const after = useRef<(() => void) | null>(null)
   const { pathname } = useLocation()
   const here = placeOf(pathname)
 
@@ -111,6 +113,9 @@ export function SiteMenu({ className = '' }: { className?: string }) {
     if (dialog.current?.open) dialog.current.close()
     lockScroll(false)
     setOpen(false)
+    const go = after.current
+    after.current = null
+    go?.()
   }
 
   const show = () => {
@@ -174,6 +179,20 @@ export function SiteMenu({ className = '' }: { className?: string }) {
       first.focus()
     }
   }
+  // A face pressed: the cube folds shut first, then the page turns. Modifier clicks and
+  // the face you are already on are left alone (or just close the menu).
+  const faceClick = (e: MouseEvent<HTMLAnchorElement>) => {
+    const a = e.currentTarget
+    if (a.dataset.folded || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+    e.preventDefault()
+    if (a.pathname === pathname) return hide()
+    after.current = () => {
+      a.dataset.folded = '1'
+      a.click()
+      delete a.dataset.folded
+    }
+    hide()
+  }
   // A press anywhere but on a face or the X closes it.
   const onClick = (e: MouseEvent<HTMLDialogElement>) => {
     if (!(e.target as Element).closest('a, button')) hide()
@@ -234,7 +253,7 @@ export function SiteMenu({ className = '' }: { className?: string }) {
                     {face}
                   </a>
                 ) : (
-                  <Link to={p.to} className="net-face" style={style} aria-current={p === here ? 'page' : undefined}>
+                  <Link to={p.to} className="net-face" style={style} aria-current={p === here ? 'page' : undefined} onClick={faceClick}>
                     {face}
                   </Link>
                 )}

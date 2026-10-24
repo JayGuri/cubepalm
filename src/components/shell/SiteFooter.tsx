@@ -25,9 +25,9 @@ const out = { target: '_blank', rel: 'noreferrer' } as const
 
 export function SiteFooter() {
   return (
-    <footer className="mt-20 pt-2 text-sm sm:mt-28">
+    <footer className="@container mt-20 pt-2 text-sm sm:mt-28">
       <ColourStrip />
-      <div className="mt-10 flex flex-col gap-10 lg:flex-row lg:justify-between">
+      <div className="mt-10 flex flex-col gap-10 @4xl:flex-row @4xl:justify-between">
         <div className="flex max-w-xs flex-col gap-4">
           <span className="text-fg">
             <Logo size={36} />
@@ -36,7 +36,7 @@ export function SiteFooter() {
             A Rubik&rsquo;s Cube you turn with your hands. Everything runs in your browser: your camera, your progress and your settings stay on this device.
           </p>
         </div>
-        <nav aria-label="Footer" className="grid grid-cols-2 gap-x-8 gap-y-8 sm:grid-cols-4">
+        <nav aria-label="Footer" className="grid grid-cols-2 gap-x-8 gap-y-8 @lg:grid-cols-4">
           <Group colour={STICKER.green} title="Play">
             <Link to="/play/cube3" className={LINK}>
               3×3 cube

@@ -14,6 +14,7 @@ export function SiteNav({ size = 44 }: { size?: number }) {
   return (
     <nav aria-label="Main" className="flex items-center justify-between gap-4">
       <Logo size={size} />
+      <div className="flex items-center gap-3">
       <ul className="face-row max-lg:hidden">
         {PLACES.map((p) => {
           const style = { '--face': p.colour } as CSSProperties
@@ -33,7 +34,8 @@ export function SiteNav({ size = 44 }: { size?: number }) {
           )
         })}
       </ul>
-      <SiteMenu className="lg:hidden" />
+      <SiteMenu />
+      </div>
     </nav>
   )
 }
