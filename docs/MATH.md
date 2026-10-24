@@ -1,8 +1,8 @@
 # The math behind CubePalm
 
-A from-scratch tour of every piece of mathematics this project uses, in the
-order you'd need it to build the app yourself. No background assumed beyond
-school algebra. Each section ends with **where it lives in the code**.
+This is a tour of the mathematics CubePalm uses, in the order you would need it
+if you were building the app yourself. You only need school algebra to start.
+Each section ends with a note on where it lives in the code.
 
 1. [Describing a cube with numbers](#1-describing-a-cube-with-numbers)
 2. [How many ways can a cube be scrambled?](#2-how-many-ways-can-a-cube-be-scrambled)
@@ -37,12 +37,12 @@ A 3x3 is a 3×3×3 grid of little cubes ("cubies"). Each sits at a position
 - **Corners** have no zeros, e.g. `(1, 1, 1)` is the up-front-right corner. There are 2×2×2 = **8**.
 - **Edges** have exactly one zero, e.g. `(1, 1, 0)` is the up-right edge. There are **12**.
 - **Centres** have two zeros, e.g. `(0, 1, 0)` is the U centre. There are **6**.
-- `(0, 0, 0)` is the hidden core — no cubie there, so 8 + 12 + 6 = **26** pieces.
+- `(0, 0, 0)` is the hidden core. There is no cubie there, so 8 + 12 + 6 = **26** pieces.
 
 A **layer** is every cubie sharing one coordinate value. The R face is "all
-cubies with `x = 1`"; the middle slice M is "all cubies with `x = 0`". That one
-idea, *a layer is a coordinate held fixed*, drives the animation, the move
-preview, and the guide's arrow.
+cubies with `x = 1`"; the middle slice M is "all cubies with `x = 0`". So a
+layer is just a coordinate held fixed, and that is all the animation, the move
+preview and the guide's arrow need to know.
 
 | Letter | Layer | Outward direction / position |
 |---|---|---|
@@ -66,8 +66,8 @@ spot, 7 for the next, …): `8! = 40,320`. Each corner can also be twisted 3 way
 
 **Edges.** Likewise `12!` arrangements and `2¹²` flips.
 
-That gives `8! · 3⁸ · 12! · 2¹²` — but not all of those are reachable by
-turning, because three rules hold after every legal turn:
+That gives `8! · 3⁸ · 12! · 2¹²`. Not all of those can be reached by
+turning, though, because three rules hold after every legal turn:
 
 1. **Total corner twist is always a multiple of 3.** Fix any 7 corners' twists and the 8th is forced: divide by 3.
 2. **Total edge flip is always even.** Divide by 2.
@@ -79,20 +79,20 @@ turning, because three rules hold after every legal turn:
      3 · 2 · 2
 ```
 
-That's the "43 quintillion states" on the home page. (Take a cube apart and
-reassemble it randomly and there are 12× more arrangements — 11 out of every
-12 are unsolvable, precisely because of those three rules.)
+That is the "43 quintillion states" on the home page. If you took a cube apart
+and put it back together at random, there would be 12 times more arrangements,
+and 11 out of every 12 of them are unsolvable, because of those three rules.
 
-A famous related fact: **every one of those positions can be solved in at most
-20 moves** ("God's number", proved by computer in 2010).
+A related fact: every one of those positions can be solved in at most 20 moves
+("God's number", proved by computer in 2010).
 
 ---
 
 ## 3. Moves are permutations: a little group theory
 
 Number the 54 coloured stickers. A move like `R` doesn't create or destroy
-stickers — it **rearranges** them. A rearrangement is a **permutation**, and
-permutations have a tidy algebra:
+stickers, it **rearranges** them. A rearrangement is a **permutation**, and
+permutations follow a few simple rules:
 
 - **Composition.** Doing `R` then `U` is itself one rearrangement, written `R U`.
 - **Identity.** Doing nothing.
@@ -103,10 +103,10 @@ A set with these properties is a **group**. The Rubik's Cube group is the set of
 all 43 quintillion positions, with "do one move sequence after another" as the
 operation. Three consequences show up directly in this app:
 
-- `R' = R³` — counter-clockwise equals three clockwise turns. (Your reference
+- `R' = R³`: counter-clockwise equals three clockwise turns. (Your reference
   project relied on this; here the left hand makes `R'` directly.)
-- `R2 = R R` — why the guide splits a double turn into two steps.
-- **The inverse of a sequence is the reverse of the inverses:**
+- `R2 = R R`, which is why the guide splits a double turn into two steps.
+- The inverse of a sequence is the reverse of the inverses:
   `(R U)' = U' R'`. To undo putting on socks then shoes, you take off the shoes
   first. This is how Undo walks back through your history.
 
@@ -116,8 +116,8 @@ means a half turn. The slices follow a neighbour: M turns like L, E like D,
 S like F.
 
 **In the code:** the permutation algebra is done by the `cubing.js` library
-(`KPuzzle`/`KPattern`), wrapped in `src/core/puzzles/cube3/logic.ts`. It's never
-hand-rolled — it's the single source of truth every test checks against.
+(`KPuzzle`/`KPattern`), wrapped in `src/core/puzzles/cube3/logic.ts`. I never
+wrote this part by hand. It is the single source of truth every test checks against.
 
 ---
 
@@ -130,9 +130,9 @@ A **vector** is an arrow: `(1, 0, 0)` points along +x. A rotation needs an
 **right-hand rule**: point your right thumb along the axis, and your fingers
 curl in the *positive* direction.
 
-A subtlety here caused a real bug. "Clockwise" in cube notation means clockwise
+This one caused a real bug. "Clockwise" in cube notation means clockwise
 **when you look at the face from outside**. For `R` you look from the right,
-i.e. back *down* the +x axis toward the centre. From that viewpoint the
+that is, back *down* the +x axis toward the centre. From there the
 right-hand rule's positive direction looks **counter-clockwise**. So:
 
 ```
@@ -142,33 +142,33 @@ L  (clockwise from outside)  =  rotation by +90° about +x   (you look from −x
 
 Faces on the negative side (L, D, B) flip sign because you view them from the
 other end of the same axis. Get this wrong and the animation shows one
-direction while the cube actually does the opposite — the "animation says U,
-cube does U'" bug fixed early on.
+direction while the cube actually does the opposite. That was the "animation
+says U, cube does U'" bug, fixed early on.
 
 ### Quaternions: smooth rotation
 
 To animate a turn, every cubie in the layer is rotated by a growing angle each
-frame. Rotations are stored as **quaternions**, four numbers:
+frame. I store rotations as **quaternions**, four numbers:
 
 ```
 q = ( cos(θ/2),  sin(θ/2)·aₓ,  sin(θ/2)·a_y,  sin(θ/2)·a_z )
 ```
 
 for a rotation by angle θ about a unit-length axis `a`. They never get stuck the
-way three separate angles can ("gimbal lock"), they combine cheaply, and they're
-what the 3D engine (three.js) uses internally.
+way three separate angles can ("gimbal lock"), they combine cheaply, and the 3D
+engine (three.js) uses them internally.
 
 ### Easing
 
-A turn that starts and stops at full speed looks robotic. The fraction of the
-turn completed at time `t` (0 to 1) goes through an **ease-in-out** curve:
+A turn that starts and stops at full speed looks robotic. So the fraction of the
+turn completed at time `t` (0 to 1) is passed through an **ease-in-out** curve:
 
 ```
 ease(t) = 2t²               for t < ½
         = 1 − (−2t + 2)² / 2  for t ≥ ½
 ```
 
-Slow start, fast middle, gentle stop. A quarter turn takes 220 ms.
+It starts slowly, speeds up in the middle and settles at the end. A quarter turn takes 220 ms.
 
 **In the code:** `src/core/animation/parseCubeMove.ts` (notation → axis, layer,
 signed angle), and the `useFrame` loop in `src/components/PuzzleCanvas.tsx`
@@ -182,14 +182,14 @@ disagree with the real turn.
 
 ### Projection
 
-The screen is flat; the cube isn't. A **perspective camera** maps each 3D point
-to the screen by dividing by its depth, so distant things shrink. The result is
-in **normalized device coordinates (NDC)**, where the screen runs from −1 to +1
-in both directions.
+The screen is flat and the cube is not. A **perspective camera** maps each 3D
+point to the screen by dividing by its depth, so distant things shrink. The
+result is in **normalized device coordinates (NDC)**, where the screen runs from
+−1 to +1 in both directions.
 
 ### Raycasting
 
-Going the other way: a mouse click is a 2D point. Shoot a **ray** from the
+Going the other way, a mouse click is a 2D point. Shoot a **ray** from the
 camera through that point and find the first triangle of the cube it hits. That
 tells you which cubie, and which face of it, you clicked.
 
@@ -198,9 +198,9 @@ tells you which cubie, and which face of it, you clicked.
 When you orbit, the camera slides over an imaginary sphere around the cube. A
 point on a sphere is easier to describe with **spherical coordinates**:
 
-- `r` — distance from the cube (zoom),
-- `θ` (theta) — angle around the vertical axis (left–right orbit),
-- `φ` (phi) — angle down from straight above (up–down orbit).
+- `r` is the distance from the cube (zoom),
+- `θ` (theta) is the angle around the vertical axis (left to right orbit),
+- `φ` (phi) is the angle down from straight above (up and down orbit).
 
 Orbiting by hand nudges `θ` and `φ` by the hand's movement × a sensitivity;
 zooming changes `r`. `φ` is kept a little away from 0 and π so the camera can't
@@ -219,9 +219,9 @@ You click a sticker and drag. Which layer turns, and which way?
 
 1. **Which face did you grab?** Raycasting gives its outward normal, e.g. `(0, 0, 1)` = front.
 2. **Which way did you drag?** Project each 3D axis onto the screen to see which screen direction it points. Compare your drag with each using the **dot product** `a·b = aₓbₓ + a_y b_y`; the larger it is, the more the drag lines up with that axis.
-3. **Around which axis does the layer rotate?** The one perpendicular to both the face normal and your drag — exactly what the **cross product** `normal × drag` gives. Grab the front and drag right: the axis is vertical, so a horizontal layer turns.
+3. **Around which axis does the layer rotate?** The one perpendicular to both the face normal and your drag, which is exactly what the **cross product** `normal × drag` gives. Grab the front and drag right: the axis is vertical, so a horizontal layer turns.
 4. **Which layer?** The grabbed cubie's coordinate along that axis: 1, 0 or −1. Zero means a middle slice.
-5. **Which direction?** The signs from steps 2–4, corrected for the "clockwise from outside" rule in section 4.
+5. **Which direction?** The signs from steps 2 to 4, corrected for the "clockwise from outside" rule in section 4.
 
 **In the code:** `src/core/gestures/MouseDragAdapter.ts` (`moveFromDrag`).
 
@@ -239,9 +239,9 @@ It also reports which hand it thinks it is, and how confident it is.
 ### Making it size-independent
 
 Your hand looks bigger near the camera. So every distance is divided by a
-**hand scale**: wrist to the base of the middle finger. "The fingertip is 1.9
-hand-lengths from the wrist" then means the same at any distance. This is
-**normalisation**.
+**hand scale**, the distance from the wrist to the base of the middle finger.
+Then "the fingertip is 1.9 hand-lengths from the wrist" means the same at any
+distance. This is called **normalisation**.
 
 ### Is a finger up?
 
@@ -250,7 +250,7 @@ the wrist (`extendedRatio`); a curled tip sits much closer.
 
 ### Poses as binary numbers
 
-Index, middle, ring, pinky — four yes/no answers make a 4-bit binary number, so
+Index, middle, ring, pinky: four yes/no answers make a 4-bit binary number, so
 `2⁴ = 16` poses:
 
 | Pose | Fingers | Meaning |
@@ -259,21 +259,21 @@ Index, middle, ring, pinky — four yes/no answers make a 4-bit binary number, s
 | `0000` | none up | fist → lock |
 | 9 of the other 14 | | the nine layers |
 
-The thumb is ignored — it's the least reliable finger to track. The **hand**
-adds one more bit, right or left = clockwise or counter-clockwise, so
+The thumb is ignored, because it is the least reliable finger to track. The **hand**
+adds one more bit, right or left meaning clockwise or counter-clockwise, so
 9 poses × 2 hands = **all 18 quarter turns**.
 
 ### Filtering out flicker: a majority vote
 
-A tracker can misread a single frame. If each frame is wrong with probability
-`p`, independently, how likely is a wrong pose to win **4 of the last 6** frames?
-A binomial sum:
+A tracker can misread a single frame. Suppose each frame is wrong with
+probability `p`, independently. How likely is a wrong pose to win **4 of the
+last 6** frames? It is a binomial sum:
 
 ```
 P(≥4 wrong of 6) = C(6,4)·p⁴(1−p)² + C(6,5)·p⁵(1−p) + p⁶
 ```
 
-With a fairly bad `p = 0.1`, that's about **0.0013** — roughly one false pose in
+With a fairly bad `p = 0.1`, that is about **0.0013**: roughly one false pose in
 800 windows, against one in every 10 frames without the vote. On top of that,
 a pose must be **held** for 550 ms, and it only fires on a frame where the hand
 is actually showing it.
@@ -282,7 +282,7 @@ is actually showing it.
 
 Each hand is a small **finite state machine**: *nothing recognised* → *pose
 recognised, timing the hold* → *fired* (relax to re-arm). The fist lock is a
-second, independent one. State machines turn a noisy stream of frames into
+second, independent one. A state machine turns a noisy stream of frames into
 clean, one-at-a-time decisions.
 
 **In the code:** `src/core/gestures/landmarkMath.ts` (`handScale`,
@@ -313,17 +313,18 @@ f = g + h  >  current limit
 
 If `h` **never overestimates** (it is *admissible*), no branch that could finish
 within the limit is ever thrown away. Raise the limit one move at a time and the
-first solution found is the shortest. Everything depends on a good `h`.
+first solution found is the shortest. All of this depends on `h` being a good
+estimate.
 
 ### Idea 2: pruning tables
 
-For a simplified *part* of the cube — say just the corner twists, `3⁷ = 2,187`
-possibilities — you can compute the **exact** fewest moves for every
+Take a simplified *part* of the cube, say just the corner twists, which have
+`3⁷ = 2,187` possibilities. You can compute the **exact** fewest moves for every
 possibility ahead of time (a breadth-first search) and store them in a table.
 Fixing part of the cube can never take more moves than fixing all of it, so a
-table lookup is an admissible `h`. Building these tables is the warm-up the app
-does in a background worker at start-up (1.5 to 4.1 seconds over five measured
-runs in Node; see `docs/research/solver.md`).
+table lookup is an admissible `h`. The app builds these tables in a background
+worker at start-up (1.5 to 4.1 seconds over five measured runs in Node; see
+`docs/research/solver.md`).
 
 ### Idea 3: two phases (Kociemba, 1992)
 
@@ -334,11 +335,11 @@ split the problem using a **subgroup**: the positions reachable using only
 G₁ = ⟨ U, D, R2, L2, F2, B2 ⟩
 ```
 
-— quarter turns of the top and bottom, only half turns of the sides. These moves
-never twist a corner, never flip an edge, and never move the four middle-layer
-edges out of the middle layer.
+That means quarter turns of the top and bottom, and only half turns of the
+sides. These moves never twist a corner, never flip an edge, and never move the
+four middle-layer edges out of the middle layer.
 
-**Phase 1 — get into G₁.** Only three things need fixing:
+**Phase 1: get into G₁.** Only three things need fixing:
 
 | Coordinate | What it measures | Possibilities |
 |---|---|---|
@@ -346,10 +347,10 @@ edges out of the middle layer.
 | edge flip | orientation of the 12 edges | 2¹¹ = 2,048 |
 | slice | which 4 slots hold the middle-layer edges | C(12,4) = 495 |
 
-About 2.2 billion combinations, small enough for good tables. Never more than
-12 moves.
+That is about 2.2 billion combinations, small enough for good tables. Phase 1
+never needs more than 12 moves.
 
-**Phase 2 — finish inside G₁.** Orientations are already right; only
+**Phase 2: finish inside G₁.** Orientations are already right, so only
 arrangements remain:
 
 | Coordinate | Possibilities |
@@ -358,19 +359,19 @@ arrangements remain:
 | top/bottom-layer edge arrangement | 8! = 40,320 |
 | middle-layer edge arrangement | 4! = 24 |
 
-Never more than 18 moves.
+Phase 2 never needs more than 18 moves.
 
-Each phase is a far smaller search than the whole cube. The catch: the fastest
-phase 1 can leave a long phase 2. A full implementation keeps trying longer
-phase-1 solutions to shrink the **total**, landing very close to optimal
-(usually 18–22 moves) in well under a second.
+Each phase is a much smaller search than the whole cube. The catch is that the
+fastest phase 1 can leave a long phase 2. A full implementation keeps trying
+longer phase-1 solutions to shrink the **total**, and lands very close to
+optimal (usually 18 to 22 moves) in well under a second.
 
 ### What this app's solver actually does
 
-CubePalm's solver is written from scratch (`src/core/solvers/twoPhase.ts`). It was
-first built on an off-the-shelf package, which stopped at the **first** good
-solution it found: typically 20 to 23 moves on a real scramble, and silly on a
-cube only a few turns from solved (three turns came back as 21).
+CubePalm's solver is written from scratch (`src/core/solvers/twoPhase.ts`). I
+first built it on an off-the-shelf package, which stopped at the **first** good
+solution it found. That meant 20 to 23 moves on a real scramble, and a silly
+answer on a cube only a few turns from solved (three turns came back as 21).
 
 The replacement follows the two-phase recipe above and then keeps going:
 
@@ -402,8 +403,8 @@ The replacement follows the two-phase recipe above and then keeps going:
    `(A B)' = B' A'` from section 3. The six searches advance together, one cost
    level at a time, so the cheap levels of every view are tried before the
    expensive levels of any.
-6. **Proving optimality.** Two-phase answers are short, not always shortest. A
-   second search is plain IDA* over the whole cube. Its estimate is the largest
+6. **Proving optimality.** Two-phase answers are short but not always the
+   shortest. So a second search is plain IDA* over the whole cube. Its estimate is the largest
    of several exact partial answers: the three phase-1 tables, the corner
    permutation (40,320 states), the places of six edges (665,280 placements,
    stored in a table of 2,985,984 entries), and the places of the four slice
@@ -423,8 +424,8 @@ The replacement follows the two-phase recipe above and then keeps going:
    scrambled cubes and the end of every guided solve.
 
 Cost is measured in **quarter turns** (`R2` counts as 2), because that is how
-many sign, key or drag actions a person makes. Measured on 50 uniformly random cubes (one
-thread, in Node): the very first answer averages 32.2 steps; after half a second
+many sign, key or drag actions a person makes. I measured 50 uniformly random
+cubes (one thread, in Node). The very first answer averages 32.2 steps; after half a second
 of search 26.1, after two seconds 25.0, after five seconds 24.7. In face turns,
 the unit most of the literature uses, those same routes average 23.7, 20.7,
 20.2 and 20.0. No position needs more than 26 quarter turns (the quarter-turn
@@ -436,16 +437,16 @@ changes how scrambled a cube is, only which face we call Up, so the solver keeps
 a relabelling table (`frame.ts`) instead of rotating anything, and relabels its
 answer on the way out.
 
-On top of the search, the app also tries a second, always-valid route: **undo
+Besides the search, the app tries a second route that is always valid: **undo
 your moves in reverse**, with cancelling moves merged (`R R'` disappears,
 `R R` becomes `R2`). It keeps whichever route takes fewer quarter turns, so you
 never get a long answer when a short undo exists. Neither route is guaranteed to
-be the true shortest: that needs an optimal solver (Korf's), which takes minutes
+be the true shortest. That needs an optimal solver (Korf's), which takes minutes
 and gigabytes. Two-phase answers land within a couple of moves of optimal.
 
-**Honesty check:** the tests apply every solution to a cube in `cubing.js`, an
-independent implementation, and require it to be solved, for random scrambles,
-for the superflip, and for cubes made with slice turns and rotations.
+As a check, the tests apply every solution to a cube in `cubing.js`, an
+independent implementation, and require it to be solved. They do this for random
+scrambles, for the superflip, and for cubes made with slice turns and rotations.
 
 ### Searching while you play
 
@@ -453,49 +454,50 @@ The first route is asked for with a short budget (0.4 seconds of two-phase
 search and up to 0.3 of proof, the `quick` setting in `kociemba.ts`), so Guide
 me never makes you wait. A better one is then looked for in the background:
 
-- **It starts early.** The search begins the moment a scramble lands, so by the
+- It starts early. The search begins the moment a scramble lands, so by the
   time you press Guide me it has usually beaten the first route.
-- **It is resumable.** The search keeps its own stack and runs in 30 ms slices,
+- It is resumable. The search keeps its own stack and runs in 30 ms slices,
   so it can be told to stop or to tighten its target within a blink.
-- **It is spread over cores.** Up to three helper workers each take some of the
+- It is spread over cores. Up to three helper workers each take some of the
   six views and tell each other every new best cost. One of them finishing all
   its cost levels proves the route optimal, because every solution passes through
   the simpler family of positions at its last entry into it.
-- **It restarts at every move you make.** Following the guide, each correct turn
+- It restarts at every move you make. Following the guide, each correct turn
   shortens the remaining route by one step. The search restarts from your new
   cube with "beat what is left" as its target, and swaps the guide to the new
   route when it finds a shorter one. A wrong turn is recovered by undoing it
   first, instantly, with no waiting for a new search.
-- **It can only help.** The target is always the route already in hand, so the
+- It can only help. The target is always the route already in hand, so the
   guide never gets longer, and the route is never longer than undoing the
   scramble in the same units (quarter turns).
 
-**Something that did not help.** A natural next idea is a peephole pass: any
+**Something that did not help.** An obvious next idea is a peephole pass. Any
 stretch of the answer is itself a small cube, so replace each stretch of up to
 11 quarter turns by its provably shortest equivalent. It works (it turns
 `R U U U R` into `R U' R`), but on random scrambles it gained nothing: the
-average stayed at 24.9 before and after (a figure from that experiment; its
-code is gone, so unlike the measurements below it cannot be re-run), because two-phase answers are already
-shortest over every stretch that short. Stretches long enough to matter are too
-slow to prove. It was removed rather than kept as dead weight.
+average stayed at 24.9 before and after. That figure is from the experiment
+itself, and the code is gone, so unlike the measurements below it cannot be
+re-run. The reason is that two-phase answers are already shortest over every
+stretch that short, and stretches long enough to matter are too slow to prove.
+I removed it rather than keep dead weight.
 
 **A second thing that did not help.** The first phase searches with three
 pruning tables built from small coordinates. A stronger one is the exact table
 over the flip, the slice and the twist together (about 38.7 MB), which needs the
-cube's symmetries to be reduced to fit. It was built and compared with the
-shipped solver on 12 identical seeded random cubes, in one process: the first
+cube's symmetries to be reduced to fit. I built it and compared it with the
+shipped solver on 12 identical seeded random cubes, in one process. The first
 route averaged 31.17 quarter turns against 29.50 and took 131 ms against 57; the
 route after half a second averaged 25.83 against 25.50; and building the tables
 took 4.4 s against 2.0 s. It also failed the project's own regression test on
 mean route length. Larger tables cost more to build and to search through than
 the tighter bound saved, so it was removed. These are single measurements on a
-busy machine; the differences in route length and time were all in the same
+busy machine, but the differences in route length and time were all in the same
 direction.
 
 ### Random scrambles
 
-A scramble is not a random string of moves, which would favour some cubes over
-others. It is a **random state**: pick a corner arrangement and an edge
+A random string of moves would favour some cubes over others, so a scramble is
+not that. It is a **random state**: pick a corner arrangement and an edge
 arrangement at random, make their parities agree, pick twists that sum to a
 multiple of 3 and flips that sum to a multiple of 2, and you have one of the
 43,252,003,274,489,856,000 reachable cubes with equal chance. The solver then
@@ -508,7 +510,7 @@ rejected so every value is equally likely.
 The solver makes three promises: a route it returns solves the cube, a route it
 calls "shortest" really is, and a scramble is a fair draw from every possible
 cube. The first is checked by running every route through `cubing.js`. The
-other two cannot be checked by testing, because the alternatives are too many
+other two cannot be checked by testing, because there are too many alternatives
 to try, so they are proved here. This part is stricter than the rest of the
 document, but it uses nothing beyond sections 2 and 3.
 
@@ -776,7 +778,7 @@ for example, in Joyner's book listed below). So the states that obey the rules
 are exactly the reachable ones, and the generator is uniform over them.
 `docs/research/scrambles.md` multiplies `N` out in exact arithmetic. ∎
 
-One qualification, for honesty. `randomScramble` throws away the solved cube
+One qualification. `randomScramble` throws away the solved cube
 and any cube the solver finishes in fewer than 16 face turns, so that nobody is
 handed an easy scramble. The cubes it hands out are therefore uniform apart
 from that filter, and since the filter depends on what the solver finds in a
@@ -833,7 +835,7 @@ the main thread), `kociemba.ts` (`solveFromHistory`, which also tries the undo).
 1. **Scramble** applies random moves.
 2. The solver returns a sequence like `R U2 F' …`.
 3. Each step is one **quarter turn**, because that's what one sign or key makes:
-   `U2` (and the equivalent `U2'`) becomes `U, U` — just `X2 = X X` from section 3.
+   `U2` (and the equivalent `U2'`) becomes `U, U`. That is just `X2 = X X` from section 3.
 4. When you make a move it's compared to the next step. Match → advance. No
    match → **re-solve** from where the cube actually is, so the remaining steps
    are a fresh solution from your real position.
@@ -867,7 +869,7 @@ finishes it, so "Show me" can never show a move that doesn't work.
 
 ## 10. Colour
 
-Colours are stored as RGB (red, green, blue, 0–255), but how different two
+Colours are stored as RGB (red, green, blue, 0 to 255), but how different two
 colours *look* is better judged by **hue**, the angle around the colour wheel
 (red 0°, yellow 60°, green 120°, …). For a colour whose largest channel is red,
 hue ≈ `60° × (G − B) / (max − min)`.
@@ -889,9 +891,9 @@ vivid.
 
 ## 11. The Mirror Cube
 
-A Mirror Cube turns exactly like a 3x3 — same moves, same group of 4.3 × 10¹⁹
-positions — but every piece is one colour and a **different size**, so you
-solve it by shape.
+A Mirror Cube turns exactly like a 3x3, with the same moves and the same group
+of 4.3 × 10¹⁹ positions. But every piece is one colour and a **different size**,
+so you solve it by shape.
 
 **Sizes.** Each axis is split into three slabs. The middle slab is 1.0 thick
 and centred; the outer slabs differ: right 1.40, left 0.60, up 1.25, down 0.75,
@@ -901,14 +903,14 @@ solved puzzle is a 3 × 3 × 3 block, just off-centre.
 
 **Why keep the middles centred?** Then every centre piece is a 1 × 1 square sitting
 on its own axis, and turning it doesn't change its outline. So the solved
-*shape* is exactly the 3x3's solved state with centre orientation ignored —
+*shape* is exactly the 3x3's solved state with centre orientation ignored,
 which is what the Kociemba solver solves. (A real Mirror Blocks offsets its
 middles too, which makes the centres' rotation visible and needs extra
 centre-twisting algorithms.) All six outer thicknesses are distinct and none is
 1.0, so every corner and edge has a unique shape and visibly shows if it's
 twisted.
 
-**Tracking shapes.** Colours don't move on a 3x3 renderer — stickers are
+**Tracking shapes.** Colours don't move on a 3x3 renderer; the stickers are
 repainted. Shapes have to physically travel, so each piece keeps a
 **rotation matrix** `M` (3 × 3, entries −1/0/1). Its current slot is
 `M · home`. A move rotates every piece in the turning layer by the same 90°
@@ -927,7 +929,7 @@ right too.
 
 ### Further reading
 
-- Herbert Kociemba's own explanation of the two-phase algorithm — kociemba.org
-- *God's Number is 20* — cube20.org
-- MediaPipe Hands landmark model — Google AI Edge documentation
-- David Joyner, *Adventures in Group Theory* — the Rubik's Cube as a group, gently
+- Herbert Kociemba's own explanation of the two-phase algorithm, at kociemba.org
+- *God's Number is 20*, at cube20.org
+- MediaPipe Hands landmark model, in the Google AI Edge documentation
+- David Joyner, *Adventures in Group Theory*, which treats the Rubik's Cube as a group, gently

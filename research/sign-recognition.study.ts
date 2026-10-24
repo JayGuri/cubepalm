@@ -337,7 +337,7 @@ it('sign recognition study', () => {
   const best = mixedScores.reduce((b, sc, i) => (sc.signs > mixedScores[b].signs ? i : b), 0)
   const verdict = [
     mixedScores[best].signs - shipped > 0.01
-      ? `By signs read correctly, **${readers[best].name}** leads with ${percent(mixedScores[best].signs)} against ${percent(shipped)} for the shipped rule, more than the one point the rule fixed in advance asks for.`
+      ? `By signs read correctly, ${readers[best].name} leads with ${percent(mixedScores[best].signs)} against ${percent(shipped)} for the shipped rule, more than the one point the rule fixed in advance asks for.`
       : `No reader beats the shipped rule (${percent(shipped)}) by more than one point on signs read correctly.`,
     'That is not the whole decision. A reader also has to leave a relaxed hand alone, and the readers differ far more on that than on anything else (third column). The dead-zone reader is the one built to do both.',
     'Because these are model hands, no reader replaces the default on this evidence. The dead-zone reader is offered as an option in Settings, and becomes the default only if recordings of real hands confirm it.',
@@ -411,7 +411,7 @@ it('sign recognition study', () => {
     name: 'sign-recognition',
     title: 'Reading a hand sign: how well, and what breaks it',
     summary:
-      'A sign is four fingers, each up or down. This measures how often that is read correctly by the rule the app shipped with and by four alternatives, on generated hands whose true pose is known. One thing is varied at a time to see what each reader is sensitive to, and a realistic mixed setting gives one headline number per reader.',
+      'A sign is four fingers, each up or down. This measures how often that is read correctly by the rule the app shipped with and by four alternatives, on generated hands whose true pose is known. One thing is varied at a time to see what each reader is sensitive to, and a realistic mixed setting gives one number per reader.',
     parameters: {
       'Hand model': 'src/core/gestures/handModel.ts',
       'Picture shape': '4:3',

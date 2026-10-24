@@ -1,8 +1,8 @@
 # Helping with CubePalm: two small tasks
 
-Thank you for helping. There are two tasks. Each takes about ten minutes, needs no installation, and can be done without anyone explaining it. Do either or both.
+Hi, and thank you for helping. I built CubePalm, and so far I have only tested the hand reading on a model hand, not on real ones. That is where you come in. There are two small tasks. Each takes about ten minutes, needs no installation, and should make sense without me explaining it. Do either or both.
 
-You need a phone, a tablet or a computer with a camera, and a recent Chrome, Edge, Safari or Firefox. Open **https://cubepalm.vercel.app**. If you have more than one device, doing Task 1 on each of them is especially useful: cameras differ, and that is one of the things being measured.
+You need a phone, a tablet or a computer with a camera, and a recent Chrome, Edge, Safari or Firefox. Open **https://cubepalm.vercel.app**. If you have more than one device, doing Task 1 on each of them helps a lot, because cameras differ and that is one of the things I am measuring.
 
 ## What is and is not collected
 
@@ -22,7 +22,7 @@ You need a phone, a tablet or a computer with a camera, and a recent Chrome, Edg
    - Use only the hand it names. Keep the other one out of the picture.
 5. At the end press **Send the recording** (on a phone or tablet, this opens your usual sharing menu) or **Download the recording**. The file is named `cubepalm-hands-<device>-<light>-<date>.json`.
 
-If you make a mistake on one shape, carry on; one bad clip does not spoil the rest. If something goes badly wrong, reload the page and start again.
+If you make a mistake on one shape, carry on. One bad clip does not spoil the rest. If something goes badly wrong, reload the page and start again.
 
 **Please do it twice: once in bright light and once in dim light** (a room with the main light off, or the curtains closed), answering the first question accordingly each time. If you have a second device, the same two recordings on it are worth as much again.
 
@@ -38,11 +38,11 @@ The cube can be turned by dragging, by keyboard, by on-screen buttons (on a touc
 6. If you are on a phone or tablet, do it once more with the row of turn buttons under the cube.
 7. Go to **Settings**, then **Open** (beside "Your numbers"), and press **Download as a file**. The file is named `cubepalm-usage.json`.
 
-Do not worry about speed or mistakes. A wrong turn is useful information: the guide notices and tells you how to get back.
+Do not worry about speed or mistakes. A wrong turn is useful to me, and the guide notices it and tells you how to get back.
 
 ## Sending the files
 
-Send the file or files to the person who asked you, by whatever means you normally use. Please also say, in a sentence:
+Send the file or files to me (or whoever asked you), by whatever means you normally use. Please also say, in a sentence or two:
 
 - whether you have used a Rubik's Cube before, and
 - anything that was confusing or that did not work.
@@ -53,3 +53,5 @@ Send the file or files to the person who asked you, by whatever means you normal
 - Usage files are read by eye for now, or loaded into the stats page's own summary code (`summariseUsage` in `src/state/usageLog.ts`).
 - Keep a note of who sent what only if they are happy for you to, and do not put names in file names.
 - Five people in two lighting conditions each is enough to say something about the readers. Fewer is still worth having. Different people matter most (hands differ more than cameras do); different devices come second, and the report breaks results down by device and light.
+
+Thanks again. Even one recording helps.

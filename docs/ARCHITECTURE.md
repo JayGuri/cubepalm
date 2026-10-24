@@ -59,9 +59,9 @@ Workers never talk to each other. The helper pool shares information only by way
 
 ### 2.1 Solver worker
 
-**Owns.** The solver's lookup tables and at most one background search job (`job`) at a time ([kociemba.worker.ts]). The worker file is a thin shim; the logic is in [kociembaCore.ts] and [twoPhase.ts], which are also imported by the main thread for the fallback path.
+The worker owns the solver's lookup tables and at most one background search job (`job`) at a time ([kociemba.worker.ts]). The worker file is a thin shim; the logic is in [kociembaCore.ts] and [twoPhase.ts], which are also imported by the main thread for the fallback path.
 
-**Accepts** (`SolverRequest` in [kociemba.worker.ts]); every request carries a numeric `id`:
+The worker accepts these requests (`SolverRequest` in [kociemba.worker.ts]); every request carries a numeric `id`:
 
 | `type` | Other fields | Effect |
 | --- | --- | --- |
@@ -72,32 +72,32 @@ Workers never talk to each other. The helper pool shares information only by way
 | `tighten` | `cost: number` | Lowers the current job's target cost, if the `id` matches the job. |
 | `cancel` | none | Drops the current job, if the `id` matches. |
 
-**Sends** (`SolverResponse`): `{ id, ok, result?, scramble?, progress?, error? }`. A `solve` gets one reply with `result` (a `SolveResult`: `solution`, `cost`, `noneBelow`). A `scramble` gets one reply with `scramble`. A `refine` gets many replies with `progress` (a `RefineStep`: `solution`, `cost`, `done`, `optimal`), sent only when a slice found something cheaper or the search ended. `tighten` and `cancel` get no reply. Any thrown error becomes `{ id, ok: false, error }`.
+Replies are `SolverResponse` objects, `{ id, ok, result?, scramble?, progress?, error? }`. A `solve` gets one reply with `result` (a `SolveResult`: `solution`, `cost`, `noneBelow`). A `scramble` gets one reply with `scramble`. A `refine` gets many replies with `progress` (a `RefineStep`: `solution`, `cost`, `done`, `optimal`), sent only when a slice found something cheaper or the search ended. `tighten` and `cancel` get no reply. Any thrown error becomes `{ id, ok: false, error }`.
 
-**Scheduling inside the worker.** The background job advances in slices of 30 ms (`current.refiner.step(30)`) with a zero-delay timer between slices, so a `cancel`, `tighten` or `solve` message is handled between slices. One search may run for at most `SEARCH_BUDGET_MS = 12_000` ([kociemba.worker.ts]).
+Inside the worker, the background job advances in slices of 30 ms (`current.refiner.step(30)`) with a zero-delay timer between slices, so a `cancel`, `tighten` or `solve` message is handled between slices. One search may run for at most `SEARCH_BUDGET_MS = 12_000` ([kociemba.worker.ts]).
 
-**Start and stop.** [App.tsx] imports the solver module on mount and calls `initSolver()`, on every route, so the tables are being built while the visitor is still on the home page. `getWorker()` creates the worker lazily with `new Worker(new URL('./kociemba.worker.ts', import.meta.url), { type: 'module' })`. It is never stopped in normal use. It is terminated only by `abandonWorker`, which runs when the worker raises an error or misses a deadline (section 5) ([kociemba.ts]).
+[App.tsx] imports the solver module on mount and calls `initSolver()`, on every route, so the tables are being built while the visitor is still on the home page. `getWorker()` creates the worker lazily with `new Worker(new URL('./kociemba.worker.ts', import.meta.url), { type: 'module' })`. It is never stopped in normal use. It is terminated only by `abandonWorker`, which runs when the worker raises an error or misses a deadline (section 5) ([kociemba.ts]).
 
 ### 2.2 Helper worker pool
 
-**Owns.** Each helper is another instance of the solver worker script with its own copy of the two-phase tables and its own job. Helpers are sent `{ type: 'init', proofs: false }`, so they skip the optimal-search tables: they only run the two-phase search ([kociemba.ts]).
+Each helper is another instance of the solver worker script with its own copy of the two-phase tables and its own job. Helpers are sent `{ type: 'init', proofs: false }`, so they skip the optimal-search tables: they only run the two-phase search ([kociemba.ts]).
 
-**Accepts and sends.** The same `SolverRequest` and `SolverResponse` types, but the service only ever sends helpers `init`, `refine` (with a `slice`), `tighten` and `cancel`, and only reads `progress` replies from them.
+Helpers use the same `SolverRequest` and `SolverResponse` types, but the service only ever sends helpers `init`, `refine` (with a `slice`), `tighten` and `cancel`, and only reads `progress` replies from them.
 
-**Start and stop.** `ensurePool()` creates the helpers the first time a background search is requested. `releaseSolverPool()` terminates them; it is called when the play screen unmounts ([useGuideState.ts]) and, with `failed = true`, when a helper raises an error or the solver worker is abandoned. After a failure the pool stays disabled (`poolDisabled`) until `retrySolver()` ([kociemba.ts]).
+`ensurePool()` creates the helpers the first time a background search is requested. `releaseSolverPool()` terminates them; it is called when the play screen unmounts ([useGuideState.ts]) and, with `failed = true`, when a helper raises an error or the solver worker is abandoned. After a failure the pool stays disabled (`poolDisabled`) until `retrySolver()` ([kociemba.ts]).
 
 ### 2.3 Hand-tracking worker
 
-**Owns.** One `HandLandmarkerService`, which wraps MediaPipe's `HandLandmarker` configured with `runningMode: 'VIDEO'` and `numHands: 2`. The WebAssembly runtime and the model are loaded from the application's own origin (`WASM_PATH = '/mediapipe/wasm'`, `MODEL_PATH = '/models/hand_landmarker.task'`), not from a CDN ([HandLandmarkerService.ts]).
+The worker owns one `HandLandmarkerService`, which wraps MediaPipe's `HandLandmarker` configured with `runningMode: 'VIDEO'` and `numHands: 2`. The WebAssembly runtime and the model are loaded from the application's own origin (`WASM_PATH = '/mediapipe/wasm'`, `MODEL_PATH = '/models/hand_landmarker.task'`), not from a CDN ([HandLandmarkerService.ts]).
 
-**Accepts** (`TrackerRequest` in [handTracker.worker.ts]):
+The worker accepts these requests (`TrackerRequest` in [handTracker.worker.ts]):
 
 | `type` | Other fields | Effect |
 | --- | --- | --- |
 | `init` | none | Loads the runtime and model, trying the GPU first and then the CPU. |
 | `frame` | `bitmap: ImageBitmap`, `timestampMs: number` | Runs detection on the bitmap, then closes the bitmap. |
 
-**Sends** (`TrackerResponse`):
+The worker sends these replies (`TrackerResponse`):
 
 | `type` | Other fields | Meaning |
 | --- | --- | --- |
@@ -105,7 +105,7 @@ Workers never talk to each other. The helper pool shares information only by way
 | `failed` | `error: string` | The model could not be loaded. |
 | `result` | `frame: LandmarkFrame \| null` | The hands found in one frame, or `null` if detection threw or the frame was skipped. |
 
-**Start and stop.** The worker is created only when the user switches the play screen to Hands mode: `useHandGestures` runs only while `enabled` is true, and [FreePlay.tsx] passes `enabled: inputMode === 'hands'`. `startWorkerTracker` requires `Worker`, `createImageBitmap` and `OffscreenCanvas` to exist, posts `init`, and waits up to `WORKER_START_MS = 45_000` for `ready`. The worker is terminated by `dispose()`, which the hook calls when Hands mode is switched off or the screen unmounts ([handTracker.ts], [useHandGestures.ts]).
+The worker is created only when the user switches the play screen to Hands mode: `useHandGestures` runs only while `enabled` is true, and [FreePlay.tsx] passes `enabled: inputMode === 'hands'`. `startWorkerTracker` requires `Worker`, `createImageBitmap` and `OffscreenCanvas` to exist, posts `init`, and waits up to `WORKER_START_MS = 45_000` for `ready`. The worker is terminated by `dispose()`, which the hook calls when Hands mode is switched off or the screen unmounts ([handTracker.ts], [useHandGestures.ts]).
 
 ### 2.4 Service worker
 
@@ -140,21 +140,21 @@ sequenceDiagram
   Play->>GL: ORBIT and ZOOM events on a second feed
 ```
 
-**Camera.** `startCamera` asks `getUserMedia` for video only, with ideal size 640 by 480 and `facingMode: 'user'` ([camera.ts]). The camera request and the model load are started together with `Promise.all`, so the browser's permission prompt is not delayed by the model download ([useHandGestures.ts]).
+`startCamera` asks `getUserMedia` for video only, with ideal size 640 by 480 and `facingMode: 'user'` ([camera.ts]). The camera request and the model load are started together with `Promise.all`, so the browser's permission prompt is not delayed by the model download ([useHandGestures.ts]).
 
-**Frame loop.** A `requestAnimationFrame` loop on the main thread decides when to sample the video. It skips a tick if a detection is still in flight (`busy`), if the video has no current frame (`video.readyState < 2`), or if less than one interval has passed. The interval is `1000 / targetFps` with `targetFps = 25` when the model runs in the worker. When the model runs on the main thread the interval is `Math.max(baseIntervalMs, costMs * 3)`, where `costMs` is a smoothed measurement of detection time, so detection takes at most about a third of the main thread's time ([useHandGestures.ts]).
+A `requestAnimationFrame` loop on the main thread decides when to sample the video. It skips a tick if a detection is still in flight (`busy`), if the video has no current frame (`video.readyState < 2`), or if less than one interval has passed. The interval is `1000 / targetFps` with `targetFps = 25` when the model runs in the worker. When the model runs on the main thread the interval is `Math.max(baseIntervalMs, costMs * 3)`, where `costMs` is a smoothed measurement of detection time, so detection takes at most about a third of the main thread's time ([useHandGestures.ts]).
 
-**ImageBitmap to worker.** The worker-backed `detect` copies the video's current frame with `createImageBitmap(video)` and posts it with the bitmap in the transfer list, which moves ownership to the worker instead of copying pixels a second time. Only one frame is in flight: if a result is still awaited, `detect` returns `null`, so a slow device drops frames instead of queueing them ([handTracker.ts]). The worker closes the bitmap in a `finally` block after detection ([handTracker.worker.ts]).
+The worker-backed `detect` copies the video's current frame with `createImageBitmap(video)` and posts it with the bitmap in the transfer list, which moves ownership to the worker instead of copying pixels a second time. Only one frame is in flight: if a result is still awaited, `detect` returns `null`, so a slow device drops frames instead of queueing them ([handTracker.ts]). The worker closes the bitmap in a `finally` block after detection ([handTracker.worker.ts]).
 
-**Landmarks.** The service converts MediaPipe's result into a plain `LandmarkFrame`: `{ hands: [{ landmarks, handedness, score }], timestampMs }` ([HandLandmarkerService.ts], [landmarks.ts]). Nothing downstream imports MediaPipe types, which is what allows the recognisers to be unit tested with synthetic frames.
+The service converts MediaPipe's result into a plain `LandmarkFrame`: `{ hands: [{ landmarks, handedness, score }], timestampMs }` ([HandLandmarkerService.ts], [landmarks.ts]). Nothing downstream imports MediaPipe types, which is what allows the recognisers to be unit tested with synthetic frames.
 
-**The gesture feed.** Each frame is passed through `stepGesture`, a pure state machine that produces camera-level events such as `ORBIT` and `ZOOM` ([GestureRecognizer.ts]), and is then published with `feed.emit(frame, events)`. The feed is a set of listener functions with `subscribe` and `emit`. It is deliberately not React state. The comment on `GestureFeed` in [useHandGestures.ts] gives the reason:
+Each frame is passed through `stepGesture`, a pure state machine that produces camera-level events such as `ORBIT` and `ZOOM` ([GestureRecognizer.ts]), and is then published with `feed.emit(frame, events)`. The feed is a set of listener functions with `subscribe` and `emit`. It is deliberately not React state. The comment on `GestureFeed` in [useHandGestures.ts] gives the reason:
 
 > Camera frames as they arrive, about 25 a second. This is deliberately not React state: a screen that re-rendered on every frame spent most of its time re-rendering. Whoever needs a frame subscribes, does its sums outside React, and only sets state when something a person can see has changed.
 
 There are three subscribers. [CameraDebugOverlay.tsx] draws the hand skeleton directly onto a 2D canvas. [GestureConfidenceIndicator.tsx] sets state only when the confidence band changes. [FreePlay.tsx] runs the recognisers described next and quantises what it shows: the hold ring advances in steps of 1/12 and the lock ring in steps of 1/20, and state is set only when the quantised value changes.
 
-**Sign recogniser.** `stepSigns` in [signGestures.ts] is a pure function from (previous state, frame) to (next state, events). For each hand it:
+`stepSigns` in [signGestures.ts] is a pure function from (previous state, frame) to (next state, events). For each hand it:
 
 1. ignores the hand if its score is below `minScore: 0.5`;
 2. reads a four-character pose, one character per finger from index to little finger, where by default a finger is extended if its tip is more than `extendedRatio: 1.4` hand-scales from the wrist (`distanceReader` in [poseReaders.ts]);
@@ -164,11 +164,11 @@ There are three subscribers. [CameraDebugOverlay.tsx] draws the hand skeleton di
 
 The right hand produces the clockwise turn and the left hand the counter-clockwise turn (`notationFor`). MediaPipe's handedness label is used as given; the `swapHands` setting inverts it ([signGestures.ts], [settingsStore.ts]).
 
-**Fist lock.** In the same callback, `stepFistLock` toggles the view lock when exactly one hand is a fist for `FIST_LOCK_HOLD_MS = 900`, and then requires the fist to be released before it can toggle again ([fistLock.ts]).
+In the same callback, `stepFistLock` toggles the view lock when exactly one hand is a fist for `FIST_LOCK_HOLD_MS = 900`, and then requires the fist to be released before it can toggle again ([fistLock.ts]).
 
-**To the queue, store and canvas.** Each `TURN` event's move is passed to `userMove`, the same function that keyboard, mouse drag and touch buttons call ([FreePlay.tsx]). From there the move follows the path in section 4. The 3D canvas receives only `ORBIT` and `ZOOM` events, on a second feed owned by the play screen, and `ORBIT` is withheld while any sign is recognised so that holding a sign does not move the camera ([FreePlay.tsx], [PuzzleCanvas.tsx]).
+Each `TURN` event's move is passed to `userMove`, the same function that keyboard, mouse drag and touch buttons call ([FreePlay.tsx]). From there the move follows the path in section 4. The 3D canvas receives only `ORBIT` and `ZOOM` events, on a second feed owned by the play screen, and `ORBIT` is withheld while any sign is recognised so that holding a sign does not move the camera ([FreePlay.tsx], [PuzzleCanvas.tsx]).
 
-**Testing seam.** In development builds only, `useHandGestures` exposes `window.__cubepalmInjectFrame`, which feeds a synthetic `LandmarkFrame` into the same `processFrame` function the camera loop uses. The browser tests use it because continuous integration has no camera ([useHandGestures.ts], [hand-signs.spec.ts]).
+In development builds only, `useHandGestures` exposes `window.__cubepalmInjectFrame`, which feeds a synthetic `LandmarkFrame` into the same `processFrame` function the camera loop uses. The browser tests use it because continuous integration has no camera ([useHandGestures.ts], [hand-signs.spec.ts]).
 
 ### 3.1 Two ways of reading a sign, and a lost hand
 
@@ -258,19 +258,19 @@ The time a `solve` may use depends on the requested effort (`EFFORT`):
 
 `refineFromHistory(history, bound, onUpdate)` searches for a solution costing strictly less than `bound` quarter turns and reports each improvement and the end of the search. It returns a handle with `cancel()`. It has three implementations, tried in this order:
 
-1. **Helper pool.** Used when `ensurePool()` returns at least one helper.
-2. **The solver worker.** One `refine` request; the worker searches all six views itself.
-3. **The main thread.** A `Refiner` is stepped for 15 ms at a time on a zero-delay timer.
+1. The helper pool, used when `ensurePool()` returns at least one helper.
+2. The solver worker: one `refine` request; the worker searches all six views itself.
+3. The main thread: a `Refiner` is stepped for 15 ms at a time on a zero-delay timer.
 
-**Pool size.** `poolSize()` returns `Math.max(0, Math.min(phone ? 2 : 3, Math.floor((cores - 2) / 2)))`, where `cores` is `navigator.hardwareConcurrency` (2 if unknown) and `phone` is true when the primary pointer is coarse. Two cores are left for drawing and hand tracking. This gives 0 helpers on 2 or 3 cores, 1 on 4 cores, and 3 on 8 or more (2 on a phone).
+`poolSize()` returns `Math.max(0, Math.min(phone ? 2 : 3, Math.floor((cores - 2) / 2)))`, where `cores` is `navigator.hardwareConcurrency` (2 if unknown) and `phone` is true when the primary pointer is coarse. Two cores are left for drawing and hand tracking. This gives 0 helpers on 2 or 3 cores, 1 on 4 cores, and 3 on 8 or more (2 on a phone).
 
-**How views are split.** The two-phase search looks at the same cube from six points of view (three relabellings of the faces, each for the scramble and for its inverse). Each helper receives `slice: { index, count }`, and `createRefineJob` keeps the views whose position `i` satisfies `i % count === index`. With three helpers each one searches two views ([twoPhase.ts]).
+The two-phase search looks at the same cube from six points of view (three relabellings of the faces, each for the scramble and for its inverse). Each helper receives `slice: { index, count }`, and `createRefineJob` keeps the views whose position `i` satisfies `i % count === index`. With three helpers each one searches two views ([twoPhase.ts]).
 
-**How bounds are shared.** Each helper starts with the same `bound`. When a helper reports a solution cheaper than the best known cost, the service records the new cost, forwards the solution to the caller, and posts `{ type: 'tighten', cost }` to every other helper. A helper applies it with `RefineJob.tighten`, which lowers its `bestCost`, so from then on it prunes against the cheaper target ([kociemba.ts], [twoPhase.ts]).
+Each helper starts with the same `bound`. When a helper reports a solution cheaper than the best known cost, the service records the new cost, forwards the solution to the caller, and posts `{ type: 'tighten', cost }` to every other helper. A helper applies it with `RefineJob.tighten`, which lowers its `bestCost`, so from then on it prunes against the cheaper target ([kociemba.ts], [twoPhase.ts]).
 
-**How it ends.** The search is over when one helper reports `done` with `optimal: true`, or when every helper has reported `done`. In both cases the service posts `cancel` to all helpers. A helper also stops on its own after `SEARCH_BUDGET_MS = 12_000` ([kociemba.worker.ts]); the main-thread `Refiner` has the same default limit, `maxMs = 12_000` ([kociembaCore.ts]).
+The search is over when one helper reports `done` with `optimal: true`, or when every helper has reported `done`. In both cases the service posts `cancel` to all helpers. A helper also stops on its own after `SEARCH_BUDGET_MS = 12_000` ([kociemba.worker.ts]); the main-thread `Refiner` has the same default limit, `maxMs = 12_000` ([kociembaCore.ts]).
 
-**When searches run.** `beginSearch` in [useGuideState.ts] starts a search when a scramble has landed, after Reset returns to a scramble, and after a custom scramble. While a guide is being followed it is restarted after each of the user's turns with the remaining route length as the bound. If the user turns the cube with no guide open, the search and its result are dropped (`forgetSearch`). The search is stopped when the tab becomes hidden and started again when it becomes visible ([useGuideState.ts], [FreePlay.tsx]).
+`beginSearch` in [useGuideState.ts] starts a search when a scramble has landed, after Reset returns to a scramble, and after a custom scramble. While a guide is being followed it is restarted after each of the user's turns with the remaining route length as the bound. If the user turns the cube with no guide open, the search and its result are dropped (`forgetSearch`). The search is stopped when the tab becomes hidden and started again when it becomes visible ([useGuideState.ts], [FreePlay.tsx]).
 
 ### 5.4 What "optimal" means and when it is claimed
 
