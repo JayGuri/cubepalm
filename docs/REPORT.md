@@ -14,7 +14,7 @@ There are three technical parts:
 
 ## 2. How results are produced
 
-`research/` holds experiments that import the app's real code, never copies of it: the sign recogniser the app runs is the one measured, and the solver the app ships is the one benchmarked. Each experiment has a fixed seed and writes a Markdown report that states its own parameters. Two rules were set before any result existed and are recorded in the [plan](plans/2026-10-11-research-impact.md): no number enters a document unless a script produced it, and a change to how signs are read does not become the default on evidence from a model alone.
+`research/` holds experiments that import the app's real code, never copies of it: the sign recogniser the app runs is the one measured, and the solver the app ships is the one benchmarked. Each experiment has a fixed seed and writes a Markdown report that states its own parameters. Two rules were set before any result existed: no number enters a document unless a script produced it, and a change to how signs are read does not become the default on evidence from a model alone.
 
 ## 3. Reading a hand sign
 
